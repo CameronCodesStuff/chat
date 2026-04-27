@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- ░░ SETUP INSTRUCTIONS ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+  1. Go to https://console.firebase.google.com
+  2. Create a new project (or use existing)
+  3. Add a Web App — copy the firebaseConfig object below
+  4. Go to Build > Realtime Database > Create database (start in test mode)
+  5. Replace the placeholder values in FIREBASE CONFIG below
+  6. (Optional) Change OWNER_PASSWORD to something only you know
+  7. Host on GitHub Pages — done!
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ -->
+
+
+
+<style>
+/* ── reset ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+/* ── design tokens ───────────────────────────────────────── */
+:root {
+  --bg:       #050608;
+  --s1:       #0b0d12;
+  --s2:       #10131a;
+  --s3:       #181c26;
+  --border:   rgba(255,255,255,.06);
+  --border2:  rgba(255,255,255,.12);
+  --text:     #dde1ee;
+  --muted:    #5a6080;
+  --accent:   #4f9eff;
+  --accent2:  #ff4fa3;
+  --green:    #4fffb0;
+  --r:        12px;
+  --font:     'Syne', sans-serif;
+  --mono:     'DM Mono', monospace;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+}
+
+/* ── aurora background ───────────────────────────────────── */
+#bg {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; overflow: hidden;
+}
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0;
+  animation: drift linear infinite;
+}
+.orb:nth-child(1){ width:600px;height:600px;background:radial-gradient(circle,#1a3aff22,transparent 70%);top:-10%;left:-10%;animation-duration:22s;animation-delay:0s; }
+.orb:nth-child(2){ width:500px;height:500px;background:radial-gradient(circle,#ff1a7a18,transparent 70%);top:40%;right:-5%;animation-duration:28s;animation-delay:-8s; }
+.orb:nth-child(3){ width:700px;height:700px;background:radial-gradient(circle,#1affb220,transparent 70%);bottom:-20%;left:20%;animation-duration:34s;animation-delay:-14s; }
+.orb:nth-child(4){ width:400px;height:400px;background:radial-gradient(circle,#8b1aff1a,transparent 70%);top:10%;right:30%;animation-duration:19s;animation-delay:-5s; }
+@keyframes drift {
+  0%   { opacity:0; transform: translate(0,0) scale(1); }
+  10%  { opacity:1; }
+  50%  { transform: translate(40px,-30px) scale(1.08); }
+  90%  { opacity:1; }
+  100% { opacity:0; transform: translate(-20px,20px) scale(.96); }
+}
+
+/* scrolling grid lines */
+#bg::after {
+  content:'';
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: gridScroll 12s linear infinite;
+}
+@keyframes gridScroll { to { background-position: 48px 48px; } }
+
+/* ── layout ──────────────────────────────────────────────── */
+#app {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  height: 100vh;
+  max-width: 860px;
+  margin: 0 auto; width: 100%;
+}
+
+/* ── header ──────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(5,6,8,.75);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0;
+  gap: 10px;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.logo-mark {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(79,158,255,.4);
+  animation: logoPulse 3s ease-in-out infinite;
+}
+@keyframes logoPulse {
+  0%,100%{ box-shadow:0 0 20px rgba(79,158,255,.4); }
+  50%{ box-shadow:0 0 35px rgba(79,158,255,.7); }
+}
+
+.header-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+
+#online-pill {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: .7rem; color: var(--muted);
+  background: var(--s2); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 20px;
+}
+.online-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+#wipe-btn {
+  font-family: var(--font); font-size: .72rem; font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(255,79,100,.3);
+  color: rgba(255,79,100,.7);
+  padding: 4px 12px; border-radius: 20px;
+  cursor: pointer; letter-spacing: .04em;
+  transition: all .2s;
+}
+#wipe-btn:hover { background: rgba(255,79,100,.1); border-color: rgba(255,79,100,.7); color: #ff4f64; }
+
+/* ── identity bar ────────────────────────────────────────── */
+#id-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(5,6,8,.6);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.id-label { font-size: .68rem; color: var(--muted); font-family: var(--mono); white-space:nowrap; }
+#name-input {
+  font-family: var(--font); font-size: .82rem; font-weight: 500;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 10px; border-radius: 8px;
+  outline: none; width: 140px; transition: border-color .2s;
+}
+#name-input:focus { border-color: var(--accent); }
+#color-pick {
+  width: 30px; height: 30px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--s2);
+  cursor: pointer; padding: 2px;
+}
+#apply-btn {
+  font-family: var(--font); font-size: .75rem; font-weight: 600;
+  background: var(--accent); color: #fff;
+  border: none; padding: 5px 14px; border-radius: 8px;
+  cursor: pointer; letter-spacing: .03em;
+  transition: opacity .2s, transform .1s;
+}
+#apply-btn:hover { opacity:.85; }
+#apply-btn:active { transform: scale(.95); }
+
+/* ── messages ────────────────────────────────────────────── */
+#messages {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 3px;
+  scroll-behavior: smooth;
+}
+#messages::-webkit-scrollbar { width: 3px; }
+#messages::-webkit-scrollbar-track { background: transparent; }
+#messages::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+
+/* message rows */
+.msg-row {
+  display: flex; flex-direction: column;
+  max-width: 68%; animation: msgIn .22s cubic-bezier(.16,1,.3,1);
+}
+@keyframes msgIn {
+  from { opacity:0; transform: translateY(6px) scale(.98); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+.msg-row.own   { align-self: flex-end; align-items: flex-end; }
+.msg-row.other { align-self: flex-start; align-items: flex-start; }
+.msg-row.sys   { align-self: center; max-width: 90%; }
+
+.meta {
+  display: flex; align-items: center; gap: 7px;
+  font-size: .68rem; color: var(--muted);
+  font-family: var(--mono); margin-bottom: 3px;
+}
+.meta-name { font-weight: 500; }
+.meta-time { opacity: .6; }
+
+.bubble {
+  padding: 9px 13px; border-radius: var(--r);
+  font-size: .88rem; line-height: 1.55;
+  word-break: break-word; max-width: 100%;
+  position: relative;
+}
+.msg-row.own   .bubble {
+  background: linear-gradient(135deg, rgba(79,158,255,.18), rgba(79,158,255,.08));
+  border: 1px solid rgba(79,158,255,.25);
+  border-bottom-right-radius: 3px;
+}
+.msg-row.other .bubble {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
+.msg-row.sys .bubble {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted); font-size: .72rem;
+  font-family: var(--mono); padding: 5px 12px;
+  border-radius: 20px;
+}
+
+/* links inside bubbles */
+.bubble a {
+  color: var(--accent); text-decoration: none;
+  border-bottom: 1px solid rgba(79,158,255,.3);
+  transition: border-color .15s;
+  word-break: break-all;
+}
+.bubble a:hover { border-color: var(--accent); }
+
+/* link preview card */
+.link-preview {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+  background: var(--s1);
+  display: flex; flex-direction: column;
+  max-width: 340px;
+}
+.link-preview-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.link-preview-body { padding: 10px 12px; }
+.link-preview-host {
+  font-size: .65rem; color: var(--muted);
+  font-family: var(--mono); text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 4px;
+}
+.link-preview-title {
+  font-size: .82rem; font-weight: 600; line-height: 1.3;
+}
+.link-preview-title a { border-bottom: none; }
+
+/* media */
+.bubble img, .bubble video {
+  max-width: 100%; max-height: 300px;
+  border-radius: 8px; display: block;
+  margin-top: 4px; cursor: zoom-in;
+}
+
+/* ── typing ──────────────────────────────────────────────── */
+#typing {
+  padding: 0 20px 5px; min-height: 18px;
+  font-size: .68rem; color: var(--muted);
+  font-family: var(--mono); flex-shrink: 0;
+}
+
+/* ── input area ──────────────────────────────────────────── */
+#input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(5,6,8,.8);
+  backdrop-filter: blur(20px);
+  display: flex; align-items: flex-end; gap: 8px;
+  flex-shrink: 0;
+}
+#msg-box {
+  flex: 1; font-family: var(--font); font-size: .88rem;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--text); padding: 9px 13px; border-radius: 10px;
+  outline: none; resize: none; max-height: 130px; line-height: 1.45;
+  transition: border-color .2s;
+}
+#msg-box:focus { border-color: rgba(79,158,255,.5); }
+#msg-box::placeholder { color: var(--muted); }
+
+.btn-icon {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; cursor: pointer; color: var(--muted);
+  transition: all .2s;
+}
+.btn-icon:hover { color: var(--accent); border-color: rgba(79,158,255,.4); background: rgba(79,158,255,.08); }
+
+#send-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent), #2b7fe0);
+  border: none; border-radius: 10px; cursor: pointer; color: #fff;
+  box-shadow: 0 0 20px rgba(79,158,255,.35);
+  transition: all .2s;
+}
+#send-btn:hover { box-shadow: 0 0 32px rgba(79,158,255,.6); transform: scale(1.04); }
+#send-btn:active { transform: scale(.94); }
+#file-in { display: none; }
+
+/* ── modal overlay ───────────────────────────────────────── */
+.modal-bg {
+  display: none; position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--s1); border: 1px solid var(--border2);
+  border-radius: 16px; padding: 28px 32px;
+  width: 100%; max-width: 360px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.6);
+  animation: modalIn .2s cubic-bezier(.16,1,.3,1);
+}
+@keyframes modalIn {
+  from { opacity:0; transform: scale(.93) translateY(12px); }
+  to   { opacity:1; transform: scale(1) translateY(0); }
+}
+.modal h2 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+.modal p  { font-size: .8rem; color: var(--muted); margin-bottom: 18px; line-height:1.5; }
+.modal input {
+  width: 100%; font-family: var(--font); font-size: .88rem;
+  background: var(--s2); border: 1px solid var(--border);
+  color: var(--text); padding: 9px 13px; border-radius: 9px;
+  outline: none; margin-bottom: 12px; transition: border-color .2s;
+}
+.modal input:focus { border-color: rgba(79,158,255,.5); }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.modal-cancel {
+  font-family: var(--font); font-size: .8rem;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); padding: 7px 16px; border-radius: 8px; cursor: pointer;
+  transition: all .2s;
+}
+.modal-cancel:hover { border-color: var(--border2); color: var(--text); }
+.modal-confirm {
+  font-family: var(--font); font-size: .8rem; font-weight: 600;
+  background: linear-gradient(135deg,#ff4f64,#c0122a);
+  border: none; color: #fff; padding: 7px 16px; border-radius: 8px; cursor: pointer;
+  transition: opacity .2s;
+}
+.modal-confirm:hover { opacity: .85; }
+#modal-err { font-size: .75rem; color: #ff4f64; min-height: 18px; margin-top: -6px; margin-bottom: 8px; }
+
+/* ── lightbox ────────────────────────────────────────────── */
+#lightbox {
+  display: none; position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,.88); backdrop-filter: blur(10px);
+  align-items: center; justify-content: center; cursor: zoom-out;
+}
+#lightbox.open { display: flex; }
+#lightbox img, #lightbox video {
+  max-width: 92vw; max-height: 90vh;
+  border-radius: 10px; box-shadow: 0 20px 80px rgba(0,0,0,.8);
+}
+
+/* ── toast ───────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 80px; left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  background: var(--s3); border: 1px solid var(--border2);
+  color: var(--text); padding: 8px 20px; border-radius: 30px;
+  font-size: .8rem; font-weight: 500;
+  opacity: 0; pointer-events: none; transition: all .3s; z-index: 70;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── firebase setup notice ───────────────────────────────── */
+#setup-notice {
+  position: fixed; inset: 0; z-index: 80;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.setup-card {
+  background: var(--s1); border: 1px solid var(--border2);
+  border-radius: 18px; padding: 36px 40px; max-width: 520px; width: 100%;
+  box-shadow: 0 32px 100px rgba(0,0,0,.6);
+}
+.setup-card h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 10px; }
+.setup-card p  { font-size: .85rem; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+.setup-card code {
+  display: block; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; font-family: var(--mono);
+  font-size: .75rem; color: var(--accent); line-height: 1.7;
+  white-space: pre-wrap; margin-bottom: 20px;
+}
+.setup-card ol { padding-left: 20px; font-size: .83rem; color: var(--muted); line-height: 2; }
+.setup-card ol li { margin-bottom: 2px; }
+.setup-card ol li strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- aurora background -->
+<div id="bg">
+  <div class="orb"></div>
+  <div class="orb"></div>
+  <div class="orb"></div>
+  <div class="orb"></div>
+</div>
+
+<!-- setup notice (shown until Firebase is configured) -->
+<div id="setup-notice">
+  <div class="setup-card">
+    <h1>⚡ Setup Required</h1>
+    <p>You need to connect a Firebase Realtime Database before the chat will work. It only takes ~3 minutes and it's free.</p>
+    <ol>
+      <li>Go to <strong>console.firebase.google.com</strong> and create a project</li>
+      <li>Add a <strong>Web App</strong> and copy the config object</li>
+      <li>Go to <strong>Build › Realtime Database › Create database</strong> (test mode is fine)</li>
+      <li>Open <strong>chat.html</strong> in a text editor</li>
+      <li>Replace the <code>FIREBASE_CONFIG</code> values at the top of the file with your own</li>
+      <li>Change <code>OWNER_PASSWORD</code> to something secret</li>
+      <li>Host on <strong>GitHub Pages</strong> and share the URL!</li>
+    </ol>
+    <br>
+    <code>const FIREBASE_CONFIG = {
+  apiKey:      "AIzaSy...",
+  authDomain:  "your-project.firebaseapp.com",
+  databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+  ...
+};</code>
+    <p style="font-size:.75rem">This notice disappears automatically once a valid Firebase config is detected.</p>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">✦</div>
+      Chat
+    </div>
+    <div class="header-right">
+      <div id="online-pill">
+        <div class="online-dot"></div>
+        <span id="online-count">0</span> online
+      </div>
+      <button id="wipe-btn">⌫ Wipe</button>
+    </div>
+  </header>
+
+  <div id="id-bar">
+    <span class="id-label">name</span>
+    <input id="name-input" type="text" maxlength="24" placeholder="Anonymous">
+    <span class="id-label">colour</span>
+    <input id="color-pick" type="color" value="#4f9eff">
+    <button id="apply-btn">Apply</button>
+  </div>
+
+  <div id="messages"></div>
+  <div id="typing"></div>
+
+  <div id="input-area">
+    <textarea id="msg-box" rows="1" placeholder="Say something…"></textarea>
+    <button class="btn-icon" id="attach-btn" title="Attach image or video">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
+    <button id="send-btn" title="Send">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+    <input id="file-in" type="file" accept="image/*,video/*">
+  </div>
+</div>
+
+<!-- wipe modal -->
+<div class="modal-bg" id="wipe-modal">
+  <div class="modal">
+    <h2>🗑 Wipe all messages</h2>
+    <p>This will permanently delete every message in the chatroom. Enter the owner password to continue.</p>
+    <input type="password" id="wipe-pw" placeholder="Owner password…" autocomplete="off">
+    <div id="modal-err"></div>
+    <div class="modal-btns">
+      <button class="modal-cancel" id="wipe-cancel">Cancel</button>
+      <button class="modal-confirm" id="wipe-confirm">Wipe everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- lightbox -->
+<div id="lightbox">
+  <img id="lb-img" src="" style="display:none">
+  <video id="lb-vid" controls style="display:none"></video>
+</div>
+
+<div id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp }         from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, push, onValue, remove, set, onDisconnect }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+/* ════════════════════════════════════════
+   CONFIG — edit these two things only
+════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+   apiKey: "AIzaSyAEQwwumbQKGip-S8bBARRPA54nzSMvJVg",
+  authDomain: "htmlchatroom-dc05d.firebaseapp.com",
+  databaseURL: "https://htmlchatroom-dc05d-default-rtdb.firebaseio.com",
+  projectId: "htmlchatroom-dc05d",
+  storageBucket: "htmlchatroom-dc05d.firebasestorage.app",
+  messagingSenderId: "68434387932",
+  appId: "1:68434387932:web:b191290b385315cf8ae519"
+};
+
+const OWNER_PASSWORD = "wipe"; 
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+// hide setup notice — config is present
+document.getElementById('setup-notice').style.display = 'none';
+const isConfigured = true;
+
+let db, messagesRef, presenceRef, typingRef, myPresenceRef, myTypingRef;
+let myId = 'user_' + Math.random().toString(36).slice(2,9);
+let myName  = localStorage.getItem('chat_name')  || 'Anonymous';
+let myColor = localStorage.getItem('chat_color') || '#4f9eff';
+let typingTimer;
+let atBottom = true;
+
+// restore identity inputs
+document.getElementById('name-input').value = myName;
+document.getElementById('color-pick').value = myColor;
+
+if (isConfigured) {
+  const app = initializeApp(FIREBASE_CONFIG);
+  db = getDatabase(app);
+
+  messagesRef   = ref(db, 'messages');
+  presenceRef   = ref(db, 'presence');
+  typingRef     = ref(db, 'typing');
+  myPresenceRef = ref(db, `presence/${myId}`);
+  myTypingRef   = ref(db, `typing/${myId}`);
+
+  // ── presence ──────────────────────────────────
+  set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() })
+    .catch(err => toast('⚠ Firebase write failed: ' + err.code));
+  onDisconnect(myPresenceRef).remove();
+
+  // online count
+  onValue(presenceRef, snap => {
+    const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+    document.getElementById('online-count').textContent = count;
+  });
+
+  // ── typing ────────────────────────────────────
+  onDisconnect(myTypingRef).remove();
+
+  onValue(typingRef, snap => {
+    if (!snap.exists()) { document.getElementById('typing').textContent = ''; return; }
+    const names = Object.entries(snap.val())
+      .filter(([id, v]) => id !== myId && v.typing)
+      .map(([, v]) => v.name);
+    const el = document.getElementById('typing');
+    el.textContent = names.length
+      ? (names.length === 1 ? `${names[0]} is typing…` : `${names.slice(0,-1).join(', ')} and ${names.at(-1)} are typing…`)
+      : '';
+  });
+
+  // ── messages ──────────────────────────────────
+  onValue(messagesRef, snap => {
+    const feed = document.getElementById('messages');
+    feed.innerHTML = '';
+    if (snap.exists()) {
+      Object.values(snap.val()).forEach(renderMsg);
+    }
+    if (atBottom) feed.scrollTop = feed.scrollHeight;
+  });
+}
+
+/* ════════════════════════════════════════
+   SEND MESSAGE
+════════════════════════════════════════ */
+function sendText() {
+  const box  = document.getElementById('msg-box');
+  const text = box.value.trim();
+  if (!text || !isConfigured) return;
+  push(messagesRef, {
+    type: 'text', text,
+    name: myName, color: myColor,
+    uid: myId, ts: Date.now()
+  }).catch(err => toast('⚠ Send failed: ' + err.code));
+  box.value = '';
+  box.style.height = 'auto';
+  clearTyping();
+}
+
+document.getElementById('send-btn').addEventListener('click', sendText);
+
+const msgBox = document.getElementById('msg-box');
+msgBox.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+});
+msgBox.addEventListener('input', () => {
+  msgBox.style.height = 'auto';
+  msgBox.style.height = Math.min(msgBox.scrollHeight, 130) + 'px';
+  if (!isConfigured) return;
+  set(myTypingRef, { name: myName, typing: true });
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(clearTyping, 2000);
+});
+
+function clearTyping() {
+  if (myTypingRef) set(myTypingRef, { name: myName, typing: false });
+}
+
+/* ════════════════════════════════════════
+   FILE ATTACH
+════════════════════════════════════════ */
+document.getElementById('attach-btn').addEventListener('click', () =>
+  document.getElementById('file-in').click()
+);
+document.getElementById('file-in').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file || !isConfigured) return;
+  if (file.size > 5 * 1024 * 1024) { toast('Max file size is 5 MB'); return; }
+  toast('Uploading…');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const kind = file.type.startsWith('video') ? 'video' : 'image';
+    push(messagesRef, {
+      type: kind, data: reader.result,
+      caption: file.name,
+      name: myName, color: myColor,
+      uid: myId, ts: Date.now()
+    });
+    toast('Sent!');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+
+/* ════════════════════════════════════════
+   RENDER MESSAGE
+════════════════════════════════════════ */
+const feed = document.getElementById('messages');
+feed.addEventListener('scroll', () => {
+  atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+});
+
+function renderMsg(msg) {
+  if (msg.type === 'system') { renderSystem(msg.text); return; }
+  const own  = msg.uid === myId;
+  const row  = document.createElement('div');
+  row.className = `msg-row ${own ? 'own' : 'other'}`;
+
+  // meta
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const nameEl = document.createElement('span');
+  nameEl.className = 'meta-name';
+  nameEl.style.color = msg.color || '#4f9eff';
+  nameEl.textContent = msg.name || 'Anonymous';
+  const timeEl = document.createElement('span');
+  timeEl.className = 'meta-time';
+  timeEl.textContent = new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  meta.append(nameEl, timeEl);
+
+  // bubble
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  if (msg.type === 'text') {
+    bubble.innerHTML = linkify(escHtml(msg.text));
+    // simple link previews for URLs
+    const urls = extractUrls(msg.text);
+    if (urls.length) {
+      urls.slice(0,1).forEach(url => {
+        const preview = buildLinkPreview(url);
+        bubble.appendChild(preview);
+      });
+    }
+  } else if (msg.type === 'image') {
+    const img = document.createElement('img');
+    img.src = msg.data; img.loading = 'lazy';
+    img.addEventListener('click', () => openLB('img', msg.data));
+    bubble.appendChild(img);
+    if (msg.caption) { const c = document.createElement('div'); c.style.cssText='font-size:.7rem;color:var(--muted);margin-top:3px'; c.textContent=msg.caption; bubble.appendChild(c); }
+  } else if (msg.type === 'video') {
+    const vid = document.createElement('video');
+    vid.src = msg.data; vid.controls = true;
+    bubble.appendChild(vid);
+  }
+
+  row.append(meta, bubble);
+  feed.appendChild(row);
+}
+
+function renderSystem(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row sys';
+  const b = document.createElement('div');
+  b.className = 'bubble'; b.textContent = text;
+  row.appendChild(b); feed.appendChild(row);
+}
+
+/* ════════════════════════════════════════
+   LINK UTILS
+════════════════════════════════════════ */
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function linkify(html) {
+  return html.replace(URL_RE, url =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+  );
+}
+
+function extractUrls(text) {
+  return text.match(URL_RE) || [];
+}
+
+function buildLinkPreview(url) {
+  const card = document.createElement('div');
+  card.className = 'link-preview';
+  let hostname = '';
+  try { hostname = new URL(url).hostname.replace('www.',''); } catch(e) {}
+  card.innerHTML = `
+    <div class="link-preview-bar"></div>
+    <div class="link-preview-body">
+      <div class="link-preview-host">${escHtml(hostname)}</div>
+      <div class="link-preview-title"><a href="${url}" target="_blank" rel="noopener noreferrer">${escHtml(url.length > 60 ? url.slice(0,60)+'…' : url)}</a></div>
+    </div>`;
+  return card;
+}
+
+/* ════════════════════════════════════════
+   IDENTITY
+════════════════════════════════════════ */
+document.getElementById('apply-btn').addEventListener('click', applyIdentity);
+document.getElementById('name-input').addEventListener('keydown', e => { if(e.key==='Enter') applyIdentity(); });
+
+function applyIdentity() {
+  myName  = document.getElementById('name-input').value.trim() || 'Anonymous';
+  myColor = document.getElementById('color-pick').value;
+  localStorage.setItem('chat_name', myName);
+  localStorage.setItem('chat_color', myColor);
+  if (isConfigured) {
+    set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() });
+    push(messagesRef, { type:'system', text:`✎  renamed to ${myName}`, ts: Date.now() });
+  }
+  toast('Identity updated!');
+}
+
+/* ════════════════════════════════════════
+   WIPE MODAL
+════════════════════════════════════════ */
+document.getElementById('wipe-btn').addEventListener('click', () => {
+  document.getElementById('wipe-pw').value = '';
+  document.getElementById('modal-err').textContent = '';
+  document.getElementById('wipe-modal').classList.add('open');
+  setTimeout(() => document.getElementById('wipe-pw').focus(), 50);
+});
+document.getElementById('wipe-cancel').addEventListener('click', closeWipe);
+document.getElementById('wipe-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeWipe(); });
+
+document.getElementById('wipe-pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('wipe-confirm').click();
+});
+
+document.getElementById('wipe-confirm').addEventListener('click', () => {
+  const pw = document.getElementById('wipe-pw').value;
+  if (pw !== OWNER_PASSWORD) {
+    document.getElementById('modal-err').textContent = 'Incorrect password.';
+    document.getElementById('wipe-pw').focus();
+    return;
+  }
+  if (!isConfigured) { closeWipe(); toast('Firebase not configured yet.'); return; }
+  remove(messagesRef).then(() => {
+    closeWipe();
+    toast('All messages wiped.');
+  }).catch(() => {
+    document.getElementById('modal-err').textContent = 'Failed — check Firebase rules.';
+  });
+});
+
+function closeWipe() {
+  document.getElementById('wipe-modal').classList.remove('open');
+}
+
+/* ════════════════════════════════════════
+   LIGHTBOX
+════════════════════════════════════════ */
+function openLB(type, src) {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lb-img');
+  const vid = document.getElementById('lb-vid');
+  if (type === 'img') { img.src = src; img.style.display='block'; vid.style.display='none'; }
+  else { vid.src = src; vid.style.display='block'; img.style.display='none'; }
+  lb.classList.add('open');
+}
+document.getElementById('lightbox').addEventListener('click', () => {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lb-vid').pause();
+});
+
+/* ════════════════════════════════════════
+   TOAST
+════════════════════════════════════════ */
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), 2400);
+}
+</script>
+</body>
+</html>
