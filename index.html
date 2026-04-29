@@ -412,12 +412,12 @@ header {
   display: flex; align-items: center; gap: 5px;
   font-family: var(--font); font-size: .7rem; font-weight: 600;
   padding: 0 10px; height: 28px;
-  background: rgba(139,26,255,.08); border: 1px solid rgba(139,26,255,.3);
-  border-radius: 6px; cursor: pointer; color: rgba(139,26,255,.9);
-  transition: all .15s;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; color: var(--muted);
+  transition: all .15s; opacity: 0.55;
 }
-.fmt-hidden-btn:hover { background: rgba(139,26,255,.14); }
-.fmt-hidden-btn.active { background: rgba(139,26,255,.2); border-color: rgba(139,26,255,.6); }
+.fmt-hidden-btn:hover { background: rgba(139,26,255,.08); border-color: rgba(139,26,255,.3); color: rgba(139,26,255,.9); opacity: 1; }
+.fmt-hidden-btn.active { background: rgba(139,26,255,.18); border-color: rgba(139,26,255,.7); color: #b46fff; opacity: 1; box-shadow: 0 0 12px rgba(139,26,255,.25); }
 
 #typing {
   padding: 0 20px 5px; min-height: 18px;
@@ -818,7 +818,6 @@ let typingTimer, atBottom = true;
 let fmtBold = false, fmtItalic = false, fmtCode = false, fmtHidden = false;
 
 // WebRTC state
-let peerConnections = {};   // peerId → RTCPeerConnection
 let localStream     = null;
 let screenStream    = null;
 let callType        = null; // 'audio'|'video'|'screen'
@@ -925,7 +924,13 @@ function toggleFmt(type) {
   if (type === 'bold')   { fmtBold   = !fmtBold;   document.getElementById('fmt-bold').classList.toggle('active', fmtBold); }
   if (type === 'italic') { fmtItalic = !fmtItalic; document.getElementById('fmt-italic').classList.toggle('active', fmtItalic); }
   if (type === 'code')   { fmtCode   = !fmtCode;   document.getElementById('fmt-code').classList.toggle('active', fmtCode); }
-  if (type === 'hidden') { fmtHidden = !fmtHidden; document.getElementById('fmt-hidden').classList.toggle('active', fmtHidden); }
+  if (type === 'hidden') {
+    fmtHidden = !fmtHidden;
+    // Only highlight hidden button when it's actively ON (message WILL be hidden)
+    const hiddenBtn = document.getElementById('fmt-hidden');
+    hiddenBtn.classList.toggle('active', fmtHidden);
+    hiddenBtn.style.opacity = fmtHidden ? '1' : '0.55';
+  }
   msgBox.focus();
 }
 document.getElementById('fmt-bold').addEventListener('click', () => toggleFmt('bold'));
@@ -1194,20 +1199,22 @@ document.getElementById('wipe-confirm').addEventListener('click', () => {
 });
 
 /* ══════════════════════════════════════════
-   WebRTC CALLS (audio / video / screen share)
-   Mesh architecture: each peer connects directly to all others
+   WebRTC CALLS — proper mesh with ICE queuing
+   Each side adds its own stream so both can see/hear each other
 ══════════════════════════════════════════ */
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
-};
+const ICE_CFG = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' }
+]};
 
-// Signal helpers
+// peerId → { pc, iceBuf, peerName }
+const peers = {};
+
+// ── signalling ─────────────────────────────────────────────
 function sendSignal(targetId, data) {
-  const sigRef = ref(db, `signals/${targetId}/${myId}_${Date.now()}`);
-  set(sigRef, { ...data, from: myId, fromName: myName });
+  set(ref(db, `signals/${targetId}/${myId}_${Date.now()}`),
+    { ...data, from: myId, fromName: myName });
 }
 
 async function handleSignal(sigId, sig) {
@@ -1215,63 +1222,101 @@ async function handleSignal(sigId, sig) {
   const peerId = sig.from;
 
   if (sig.type === 'call-offer') {
-    // Show incoming call UI
+    // ── incoming call ──────────────────────────
+    // If we're already in a call with this peer, just process the renegotiation silently
+    if (peers[peerId]) {
+      const { pc } = peers[peerId];
+      await pc.setRemoteDescription({ type: 'offer', sdp: sig.sdp });
+      await drainIceBuf(peerId);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendSignal(peerId, { type: 'call-answer', sdp: answer.sdp });
+      return;
+    }
+
+    // Brand-new call — show modal
     document.getElementById('call-modal-name').textContent = sig.fromName || 'Someone';
-    document.getElementById('call-modal-type').textContent = `incoming ${sig.callType} call`;
-    document.getElementById('call-modal-avatar').textContent = sig.callType === 'audio' ? '📞' : sig.callType === 'video' ? '📹' : '🖥';
+    document.getElementById('call-modal-type').textContent =
+      `incoming ${sig.callType === 'audio' ? 'voice' : sig.callType === 'video' ? 'video' : 'screen share'} call`;
+    document.getElementById('call-modal-avatar').textContent =
+      sig.callType === 'audio' ? '📞' : sig.callType === 'video' ? '📹' : '🖥';
     document.getElementById('call-modal').classList.add('open');
 
     document.getElementById('call-accept').onclick = async () => {
       document.getElementById('call-modal').classList.remove('open');
       callType = sig.callType;
-      await startLocalStream(callType);
-      const pc = createPeerConnection(peerId);
-      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sig.sdp }));
+
+      // Get our own media to send back
+      if (callType !== 'screen') {
+        await startLocalStream(callType);
+      }
+
+      const pc = makePeerConnection(peerId, sig.fromName);
+
+      // Add our tracks so the caller can see/hear US
+      if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      if (screenStream) screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
+
+      await pc.setRemoteDescription({ type: 'offer', sdp: sig.sdp });
+      await drainIceBuf(peerId);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       sendSignal(peerId, { type: 'call-answer', sdp: answer.sdp, callType });
       startCallUI(callType);
     };
+
     document.getElementById('call-decline').onclick = () => {
       document.getElementById('call-modal').classList.remove('open');
       sendSignal(peerId, { type: 'call-declined' });
     };
 
   } else if (sig.type === 'call-answer') {
-    const pc = peerConnections[peerId];
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: sig.sdp }));
+    const p = peers[peerId];
+    if (p) {
+      await p.pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp });
+      await drainIceBuf(peerId);
+    }
 
   } else if (sig.type === 'ice-candidate') {
-    const pc = peerConnections[peerId];
-    if (pc && sig.candidate) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(sig.candidate))); } catch(e){}
+    const p = peers[peerId];
+    if (!p) return;
+    const cand = new RTCIceCandidate(JSON.parse(sig.candidate));
+    if (p.pc.remoteDescription && p.pc.remoteDescription.type) {
+      try { await p.pc.addIceCandidate(cand); } catch(e){}
+    } else {
+      p.iceBuf.push(cand);
     }
 
   } else if (sig.type === 'call-declined') {
-    toast(`${sig.fromName || 'Someone'} declined the call`);
-    hangUp();
+    toast(`${sig.fromName || 'Someone'} declined`);
+    cleanupPeer(peerId);
+    if (Object.keys(peers).length === 0) hangUp();
 
   } else if (sig.type === 'call-ended') {
     toast(`${sig.fromName || 'Someone'} left the call`);
     cleanupPeer(peerId);
-    if (Object.keys(peerConnections).length === 0) hangUp();
-
-  } else if (sig.type === 'screen-share-started') {
-    toast(`${sig.fromName || 'Someone'} started screen sharing`);
+    if (Object.keys(peers).length === 0) hangUp();
 
   } else if (sig.type === 'screen-share-stopped') {
     toast(`${sig.fromName || 'Someone'} stopped screen sharing`);
-    // Remove their screen tile
     const tile = document.getElementById('screen_' + peerId);
     if (tile) tile.remove();
   }
 }
 
-function createPeerConnection(peerId) {
-  if (peerConnections[peerId]) return peerConnections[peerId];
-  const pc = new RTCPeerConnection(ICE_SERVERS);
-  peerConnections[peerId] = pc;
+async function drainIceBuf(peerId) {
+  const p = peers[peerId];
+  if (!p) return;
+  for (const c of p.iceBuf) {
+    try { await p.pc.addIceCandidate(c); } catch(e){}
+  }
+  p.iceBuf = [];
+}
+
+function makePeerConnection(peerId, peerName) {
+  if (peers[peerId]) return peers[peerId].pc;
+  const pc = new RTCPeerConnection(ICE_CFG);
+  peers[peerId] = { pc, iceBuf: [], peerName: peerName || peerId };
 
   pc.onicecandidate = e => {
     if (e.candidate) {
@@ -1279,52 +1324,59 @@ function createPeerConnection(peerId) {
     }
   };
 
+  // ontrack fires when the REMOTE peer's stream arrives — show it
   pc.ontrack = e => {
+    if (!e.streams || !e.streams[0]) return;
     const stream = e.streams[0];
-    // Detect if screen share (video tracks > 1 is a heuristic, label check)
-    const isScreen = e.track.label && (e.track.label.includes('screen') || e.track.label.includes('display'));
-    addRemoteVideoTile(peerId, stream, isScreen);
+    const isScreen = e.track.kind === 'video' &&
+      (e.track.label.toLowerCase().includes('screen') ||
+       e.track.label.toLowerCase().includes('display') ||
+       e.track.label.toLowerCase().includes('window') ||
+       e.track.label.toLowerCase().includes('tab'));
+    showRemoteTile(peerId, peerName || peerId, stream, isScreen);
+    document.getElementById('video-grid').classList.add('visible');
+    document.getElementById('call-bar').classList.add('visible');
   };
 
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
       cleanupPeer(peerId);
     }
   };
+
   return pc;
 }
 
+// ── local media ────────────────────────────────────────────
 async function startLocalStream(type) {
   if (localStream) return;
   const constraints = type === 'audio'
     ? { audio: true, video: false }
-    : { audio: true, video: true };
+    : { audio: true, video: { width: 1280, height: 720 } };
   try {
     localStream = await navigator.mediaDevices.getUserMedia(constraints);
-    if (type === 'video') addLocalVideoTile();
+    if (type === 'video') showLocalTile();
   } catch(err) {
-    toast('⚠ Could not access ' + (type === 'audio' ? 'microphone' : 'camera/microphone'));
+    toast('⚠ Could not access ' + (type === 'audio' ? 'microphone' : 'camera'));
     throw err;
   }
 }
 
+// ── initiate call ──────────────────────────────────────────
 async function initiateCall(type) {
-  if (callActive) { toast('Already in a call'); return; }
-  // Get all online peers except self
+  if (callActive) { hangUp(); return; }
   const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
-  const peers = presSnap.exists()
-    ? Object.keys(presSnap.val()).filter(id => id !== myId)
+  const peerList = presSnap.exists()
+    ? Object.entries(presSnap.val()).filter(([id]) => id !== myId)
     : [];
 
-  if (peers.length === 0) { toast('No one else is online'); return; }
+  if (peerList.length === 0) { toast('No one else is online'); return; }
 
   callType = type;
-  try {
-    await startLocalStream(type);
-  } catch(e) { return; }
+  try { await startLocalStream(type); } catch(e) { return; }
 
-  for (const peerId of peers) {
-    const pc = createPeerConnection(peerId);
+  for (const [peerId, peerData] of peerList) {
+    const pc = makePeerConnection(peerId, peerData.name);
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -1332,27 +1384,26 @@ async function initiateCall(type) {
   }
 
   startCallUI(type);
-  push(messagesRef, { type:'system', text:`📞 ${myName} started a ${type === 'audio' ? 'voice' : type === 'video' ? 'video' : 'screen share'} call`, ts: Date.now() });
+  push(messagesRef, { type:'system',
+    text: `📞 ${myName} started a ${type === 'audio' ? 'voice' : 'video'} call`, ts: Date.now() });
 }
 
-function addLocalVideoTile() {
+// ── video tiles ────────────────────────────────────────────
+function showLocalTile() {
   const grid = document.getElementById('video-grid');
-  let tile = document.getElementById('local-tile');
-  if (tile) return;
-  tile = document.createElement('div');
-  tile.className = 'video-tile';
-  tile.id = 'local-tile';
+  if (document.getElementById('local-tile')) return;
+  const tile = document.createElement('div');
+  tile.className = 'video-tile'; tile.id = 'local-tile';
   const vid = document.createElement('video');
   vid.autoplay = true; vid.muted = true; vid.playsInline = true;
   vid.srcObject = localStream;
-  const label = document.createElement('div');
-  label.className = 'video-tile-label';
-  label.textContent = myName + ' (you)';
-  tile.append(vid, label);
-  grid.appendChild(tile);
+  const lbl = document.createElement('div');
+  lbl.className = 'video-tile-label'; lbl.textContent = myName + ' (you)';
+  tile.append(vid, lbl); grid.appendChild(tile);
+  grid.classList.add('visible');
 }
 
-function addRemoteVideoTile(peerId, stream, isScreen) {
+function showRemoteTile(peerId, peerName, stream, isScreen) {
   const grid = document.getElementById('video-grid');
   const tileId = (isScreen ? 'screen_' : 'remote_') + peerId;
   let tile = document.getElementById(tileId);
@@ -1361,115 +1412,36 @@ function addRemoteVideoTile(peerId, stream, isScreen) {
     tile.className = 'video-tile' + (isScreen ? ' screen-tile' : '');
     tile.id = tileId;
     const vid = document.createElement('video');
-    vid.autoplay = true; vid.playsInline = true; vid.controls = isScreen;
-    const label = document.createElement('div');
-    label.className = 'video-tile-label';
-    label.textContent = isScreen ? '🖥 Screen' : peerId.slice(0,8);
-    tile.append(vid, label);
-    grid.appendChild(tile);
+    vid.autoplay = true; vid.playsInline = true;
+    if (isScreen) vid.controls = true;
+    const lbl = document.createElement('div');
+    lbl.className = 'video-tile-label';
+    lbl.textContent = isScreen ? `🖥 ${peerName}'s screen` : peerName;
+    tile.append(vid, lbl); grid.appendChild(tile);
   }
-  tile.querySelector('video').srcObject = stream;
-  grid.classList.add('visible');
+  const vid = tile.querySelector('video');
+  vid.srcObject = stream;
+  // Ensure it plays (some browsers need a nudge)
+  vid.play().catch(() => {});
 }
 
-function addScreenShareTile(stream) {
+function showMyScreenTile(stream) {
   const grid = document.getElementById('video-grid');
   let tile = document.getElementById('my-screen-tile');
   if (!tile) {
     tile = document.createElement('div');
-    tile.className = 'video-tile screen-tile';
-    tile.id = 'my-screen-tile';
+    tile.className = 'video-tile screen-tile'; tile.id = 'my-screen-tile';
     const vid = document.createElement('video');
     vid.autoplay = true; vid.muted = true; vid.playsInline = true;
-    const label = document.createElement('div');
-    label.className = 'video-tile-label';
-    label.textContent = '🖥 Your screen';
-    tile.append(vid, label);
-    grid.appendChild(tile);
+    const lbl = document.createElement('div');
+    lbl.className = 'video-tile-label'; lbl.textContent = '🖥 Your screen';
+    tile.append(vid, lbl); grid.appendChild(tile);
   }
   tile.querySelector('video').srcObject = stream;
   grid.classList.add('visible');
 }
 
-function startCallUI(type) {
-  callActive = true;
-  callSeconds = 0;
-  clearInterval(callTimerInterval);
-  callTimerInterval = setInterval(() => {
-    callSeconds++;
-    const m = Math.floor(callSeconds/60);
-    const s = String(callSeconds%60).padStart(2,'0');
-    document.getElementById('call-timer').textContent = `${m}:${s}`;
-  }, 1000);
-
-  const callBar = document.getElementById('call-bar');
-  callBar.classList.add('visible');
-  document.getElementById('call-bar-label').textContent =
-    type === 'audio' ? 'Voice call' : type === 'video' ? 'Video call' : 'Screen share';
-  document.getElementById('cam-btn').style.display = type === 'video' ? '' : 'none';
-
-  // Highlight the active call button
-  document.getElementById('audio-call-btn').classList.toggle('active', type === 'audio');
-  document.getElementById('video-call-btn').classList.toggle('active', type === 'video');
-
-  if (type === 'video') {
-    document.getElementById('video-grid').classList.add('visible');
-  }
-}
-
-function hangUp() {
-  // Notify peers
-  Object.keys(peerConnections).forEach(peerId => {
-    sendSignal(peerId, { type: 'call-ended' });
-  });
-
-  // Stop all tracks
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
-
-  // Close all peer connections
-  Object.values(peerConnections).forEach(pc => pc.close());
-  peerConnections = {};
-
-  callActive = false;
-  callType   = null;
-  clearInterval(callTimerInterval);
-
-  document.getElementById('call-bar').classList.remove('visible');
-  document.getElementById('video-grid').classList.remove('visible');
-  document.getElementById('video-grid').innerHTML = '';
-  document.getElementById('audio-call-btn').classList.remove('active');
-  document.getElementById('video-call-btn').classList.remove('active');
-  document.getElementById('screen-share-btn').classList.remove('active');
-  document.getElementById('share-hint').classList.remove('visible');
-
-  isMuted = false; isCamOff = false;
-  document.getElementById('mute-btn').textContent = '🎙 Mute';
-  document.getElementById('mute-btn').classList.remove('active');
-}
-
-function cleanupPeer(peerId) {
-  if (peerConnections[peerId]) {
-    peerConnections[peerId].close();
-    delete peerConnections[peerId];
-  }
-  const videoTile  = document.getElementById('remote_' + peerId);
-  const screenTile = document.getElementById('screen_' + peerId);
-  if (videoTile)  videoTile.remove();
-  if (screenTile) screenTile.remove();
-}
-
-// Call button handlers
-document.getElementById('audio-call-btn').addEventListener('click', () => {
-  if (callActive) { hangUp(); return; }
-  initiateCall('audio');
-});
-document.getElementById('video-call-btn').addEventListener('click', () => {
-  if (callActive) { hangUp(); return; }
-  initiateCall('video');
-});
-
-// Screen share button
+// ── screen share ───────────────────────────────────────────
 document.getElementById('screen-share-btn').addEventListener('click', async () => {
   const btn = document.getElementById('screen-share-btn');
 
@@ -1481,70 +1453,125 @@ document.getElementById('screen-share-btn').addEventListener('click', async () =
     const tile = document.getElementById('my-screen-tile');
     if (tile) tile.remove();
     document.getElementById('share-hint').classList.remove('visible');
+    if (!callActive) document.getElementById('video-grid').classList.remove('visible');
 
-    // Notify peers
     const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
-    const peers = presSnap.exists() ? Object.keys(presSnap.val()).filter(id => id !== myId) : [];
-    peers.forEach(p => sendSignal(p, { type: 'screen-share-stopped' }));
+    const peerList = presSnap.exists() ? Object.keys(presSnap.val()).filter(id => id !== myId) : [];
+    peerList.forEach(p => sendSignal(p, { type: 'screen-share-stopped' }));
     return;
   }
 
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    btn.classList.add('active');
-    addScreenShareTile(screenStream);
-    document.getElementById('video-grid').classList.add('visible');
-    document.getElementById('share-hint').classList.add('visible');
-
-    // Notify peers
-    const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
-    const peers = presSnap.exists() ? Object.keys(presSnap.val()).filter(id => id !== myId) : [];
-
-    for (const peerId of peers) {
-      let pc = peerConnections[peerId];
-      if (!pc) pc = createPeerConnection(peerId);
-      screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendSignal(peerId, { type: 'call-offer', sdp: offer.sdp, callType: 'screen' });
-      sendSignal(peerId, { type: 'screen-share-started' });
-    }
-
-    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-      document.getElementById('screen-share-btn').click();
-    });
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
   } catch(e) {
-    toast('Screen share cancelled or denied');
+    toast('Screen share cancelled or denied'); return;
   }
+
+  btn.classList.add('active');
+  showMyScreenTile(screenStream);
+  document.getElementById('share-hint').classList.add('visible');
+
+  const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
+  const peerList = presSnap.exists()
+    ? Object.entries(presSnap.val()).filter(([id]) => id !== myId)
+    : [];
+
+  for (const [peerId, peerData] of peerList) {
+    // Create or reuse PC
+    const pc = makePeerConnection(peerId, peerData.name);
+    // Add screen tracks
+    screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
+    // Also add local cam/mic if available so both streams flow
+    if (localStream) localStream.getTracks().forEach(t => {
+      try { pc.addTrack(t, localStream); } catch(e) {} // ignore if already added
+    });
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    sendSignal(peerId, { type: 'call-offer', sdp: offer.sdp, callType: 'screen' });
+  }
+
+  // Auto-stop when user clicks "Stop sharing" in browser UI
+  screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+    document.getElementById('screen-share-btn').click();
+  });
+
+  push(messagesRef, { type:'system', text: `🖥 ${myName} started screen sharing`, ts: Date.now() });
 });
 
-// Mute
+// ── call UI ────────────────────────────────────────────────
+function startCallUI(type) {
+  callActive = true; callSeconds = 0;
+  clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    const m = Math.floor(callSeconds/60);
+    const s = String(callSeconds%60).padStart(2,'0');
+    document.getElementById('call-timer').textContent = `${m}:${s}`;
+  }, 1000);
+  document.getElementById('call-bar').classList.add('visible');
+  document.getElementById('call-bar-label').textContent =
+    type === 'audio' ? 'Voice call' : type === 'video' ? 'Video call' : 'Screen share';
+  document.getElementById('cam-btn').style.display = type === 'video' ? '' : 'none';
+  document.getElementById('audio-call-btn').classList.toggle('active', type === 'audio');
+  document.getElementById('video-call-btn').classList.toggle('active', type === 'video');
+  if (type !== 'audio') document.getElementById('video-grid').classList.add('visible');
+}
+
+// ── hang up ────────────────────────────────────────────────
+function hangUp() {
+  Object.keys(peers).forEach(peerId => {
+    sendSignal(peerId, { type: 'call-ended' });
+    peers[peerId].pc.close();
+  });
+  // clear peers object
+  for (const k in peers) delete peers[k];
+
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+
+  callActive = false; callType = null;
+  clearInterval(callTimerInterval);
+  document.getElementById('call-bar').classList.remove('visible');
+  document.getElementById('video-grid').classList.remove('visible');
+  document.getElementById('video-grid').innerHTML = '';
+  ['audio-call-btn','video-call-btn','screen-share-btn'].forEach(id =>
+    document.getElementById(id).classList.remove('active'));
+  document.getElementById('share-hint').classList.remove('visible');
+  isMuted = false; isCamOff = false;
+  document.getElementById('mute-btn').textContent = '🎙 Mute';
+  document.getElementById('mute-btn').classList.remove('active');
+}
+
+function cleanupPeer(peerId) {
+  if (peers[peerId]) { peers[peerId].pc.close(); delete peers[peerId]; }
+  ['remote_', 'screen_'].forEach(prefix => {
+    const t = document.getElementById(prefix + peerId); if (t) t.remove();
+  });
+}
+
+// ── call button handlers ───────────────────────────────────
+document.getElementById('audio-call-btn').addEventListener('click', () => initiateCall('audio'));
+document.getElementById('video-call-btn').addEventListener('click', () => initiateCall('video'));
+
 document.getElementById('mute-btn').addEventListener('click', () => {
   if (!localStream) return;
   isMuted = !isMuted;
   localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-  const btn = document.getElementById('mute-btn');
-  btn.textContent = isMuted ? '🔇 Unmute' : '🎙 Mute';
-  btn.classList.toggle('active', isMuted);
+  document.getElementById('mute-btn').textContent = isMuted ? '🔇 Unmute' : '🎙 Mute';
+  document.getElementById('mute-btn').classList.toggle('active', isMuted);
 });
 
-// Cam toggle
 document.getElementById('cam-btn').addEventListener('click', () => {
   if (!localStream) return;
   isCamOff = !isCamOff;
   localStream.getVideoTracks().forEach(t => t.enabled = !isCamOff);
-  const btn = document.getElementById('cam-btn');
-  btn.textContent = isCamOff ? '📷 Show cam' : '📷 Cam';
-  btn.classList.toggle('active', isCamOff);
+  document.getElementById('cam-btn').textContent = isCamOff ? '📷 Show' : '📷 Cam';
+  document.getElementById('cam-btn').classList.toggle('active', isCamOff);
 });
 
-// Hang up
 document.getElementById('hang-btn').addEventListener('click', hangUp);
-
-// Share hint close
-document.getElementById('share-hint-close').addEventListener('click', () => {
-  document.getElementById('share-hint').classList.remove('visible');
-});
+document.getElementById('share-hint-close').addEventListener('click', () =>
+  document.getElementById('share-hint').classList.remove('visible'));
 
 /* ══════════════════════════════════════════
    LIGHTBOX
