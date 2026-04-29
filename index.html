@@ -6,26 +6,12 @@
 <title>Chat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-    <link rel="icon" href="https://avatars.githubusercontent.com/u/151978475?v=4" type="image/png" />
-
-<!-- ░░ SETUP INSTRUCTIONS ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-  1. Go to https://console.firebase.google.com
-  2. Create a new project (or use existing)
-  3. Add a Web App — copy the firebaseConfig object below
-  4. Go to Build > Realtime Database > Create database (start in test mode)
-  5. Replace the placeholder values in FIREBASE CONFIG below
-  6. (Optional) Change OWNER_PASSWORD to something only you know
-  7. Host on GitHub Pages — done!
-░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ -->
-
-
+<link rel="icon" href="https://avatars.githubusercontent.com/u/151978475?v=4" type="image/png" />
 
 <style>
-/* ── reset ───────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
 
-/* ── design tokens ───────────────────────────────────────── */
 :root {
   --bg:       #050608;
   --s1:       #0b0d12;
@@ -53,7 +39,6 @@ body {
   position: relative;
 }
 
-/* ── aurora background ───────────────────────────────────── */
 #bg {
   position: fixed; inset: 0; z-index: 0;
   pointer-events: none; overflow: hidden;
@@ -76,8 +61,6 @@ body {
   90%  { opacity:1; }
   100% { opacity:0; transform: translate(-20px,20px) scale(.96); }
 }
-
-/* scrolling grid lines */
 #bg::after {
   content:'';
   position:absolute; inset:0;
@@ -89,7 +72,6 @@ body {
 }
 @keyframes gridScroll { to { background-position: 48px 48px; } }
 
-/* ── layout ──────────────────────────────────────────────── */
 #app {
   position: relative; z-index: 1;
   display: flex; flex-direction: column;
@@ -98,15 +80,14 @@ body {
   margin: 0 auto; width: 100%;
 }
 
-/* ── header ──────────────────────────────────────────────── */
 header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: rgba(5,6,8,.75);
   backdrop-filter: blur(20px);
   flex-shrink: 0;
-  gap: 10px;
+  gap: 8px;
 }
 .logo {
   display: flex; align-items: center; gap: 10px;
@@ -128,7 +109,22 @@ header {
   50%{ box-shadow:0 0 35px rgba(79,158,255,.7); }
 }
 
-.header-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.header-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
+/* Call buttons — small, clean */
+.call-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer; color: var(--muted);
+  transition: all .2s; position: relative;
+  flex-shrink: 0;
+}
+.call-btn:hover { color: var(--green); border-color: rgba(79,255,176,.3); background: rgba(79,255,176,.06); }
+.call-btn.active { color: #ff4f64; border-color: rgba(255,79,100,.4); background: rgba(255,79,100,.1); animation: callPulse 1.5s ease-in-out infinite; }
+@keyframes callPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,79,100,.4)} 50%{box-shadow:0 0 0 6px rgba(255,79,100,0)} }
+
+.call-divider { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
 
 #online-pill {
   display: flex; align-items: center; gap: 6px;
@@ -155,7 +151,6 @@ header {
 }
 #wipe-btn:hover { background: rgba(255,79,100,.1); border-color: rgba(255,79,100,.7); color: #ff4f64; }
 
-/* ── identity bar ────────────────────────────────────────── */
 #id-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 16px;
@@ -187,7 +182,90 @@ header {
 #apply-btn:hover { opacity:.85; }
 #apply-btn:active { transform: scale(.95); }
 
-/* ── messages ────────────────────────────────────────────── */
+/* ── call bar (appears when in call) ── */
+#call-bar {
+  display: none;
+  align-items: center; justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(79,255,176,.15);
+  background: rgba(79,255,176,.04);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0;
+  gap: 8px;
+}
+#call-bar.visible { display: flex; }
+.call-bar-info {
+  display: flex; align-items: center; gap: 10px;
+  font-size: .78rem; font-family: var(--mono);
+}
+.call-bar-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 10px var(--green);
+  animation: blink 1s ease-in-out infinite;
+}
+.call-bar-label { color: var(--green); font-weight: 500; }
+.call-bar-timer { color: var(--muted); }
+.call-bar-actions { display: flex; gap: 6px; }
+.call-ctrl {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--font); font-size: .72rem; font-weight: 600;
+  padding: 4px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid; transition: all .2s;
+}
+.call-ctrl.mute { background: rgba(255,255,255,.04); border-color: var(--border); color: var(--muted); }
+.call-ctrl.mute:hover { color: var(--text); border-color: var(--border2); }
+.call-ctrl.mute.active { color: #ff4f64; border-color: rgba(255,79,100,.4); background: rgba(255,79,100,.08); }
+.call-ctrl.hang { background: rgba(255,79,100,.1); border-color: rgba(255,79,100,.4); color: #ff4f64; }
+.call-ctrl.hang:hover { background: rgba(255,79,100,.2); }
+
+/* video grid */
+#video-grid {
+  display: none;
+  flex-shrink: 0;
+  background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-height: 220px;
+  overflow: hidden;
+}
+#video-grid.visible { display: flex; }
+.video-tile {
+  flex: 1; min-width: 140px; max-width: 260px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  position: relative; aspect-ratio: 16/9;
+}
+.video-tile video {
+  width: 100%; height: 100%; object-fit: cover;
+  display: block;
+}
+.video-tile-label {
+  position: absolute; bottom: 6px; left: 8px;
+  font-size: .65rem; font-family: var(--mono);
+  color: #fff; background: rgba(0,0,0,.5);
+  padding: 2px 7px; border-radius: 10px;
+}
+.video-tile-muted {
+  position: absolute; top: 6px; right: 8px;
+  font-size: .6rem; color: #ff4f64;
+  background: rgba(0,0,0,.5); padding: 2px 6px; border-radius: 8px;
+}
+.video-tile.screen-tile { flex: 2; min-width: 280px; border-color: rgba(79,158,255,.3); }
+.video-placeholder {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px; color: var(--muted); font-size: .75rem;
+}
+.video-placeholder-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--s3); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+}
+
 #messages {
   flex: 1; overflow-y: auto; padding: 16px 20px;
   display: flex; flex-direction: column; gap: 3px;
@@ -197,10 +275,9 @@ header {
 #messages::-webkit-scrollbar-track { background: transparent; }
 #messages::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
 
-/* message rows */
 .msg-row {
   display: flex; flex-direction: column;
-  max-width: 68%; animation: msgIn .22s cubic-bezier(.16,1,.3,1);
+  max-width: 72%; animation: msgIn .22s cubic-bezier(.16,1,.3,1);
 }
 @keyframes msgIn {
   from { opacity:0; transform: translateY(6px) scale(.98); }
@@ -242,56 +319,114 @@ header {
   border-radius: 20px;
 }
 
-/* links inside bubbles */
+/* hidden message */
+.bubble.hidden-msg {
+  background: var(--s2) !important;
+  border: 1px dashed rgba(139,26,255,.4) !important;
+  border-bottom-right-radius: var(--r) !important;
+  cursor: pointer;
+  user-select: none;
+}
+.hidden-cover {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-size: .78rem; font-family: var(--mono);
+}
+.hidden-eye { font-size: 1rem; }
+.hidden-content { display: none; }
+.bubble.hidden-msg.revealed .hidden-cover { display: none; }
+.bubble.hidden-msg.revealed .hidden-content { display: block; }
+.hidden-timer-bar {
+  height: 2px; margin-top: 8px; border-radius: 2px;
+  background: linear-gradient(90deg, #8b1aff, #ff4fa3);
+  width: 100%;
+  transition: width linear;
+}
+
+/* file attachment bubble */
+.file-bubble {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--s2); border: 1px solid var(--border);
+  margin-top: 4px; cursor: pointer; transition: border-color .2s;
+  text-decoration: none; color: var(--text);
+}
+.file-bubble:hover { border-color: rgba(79,158,255,.4); }
+.file-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(79,158,255,.1); border: 1px solid rgba(79,158,255,.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .9rem; flex-shrink: 0;
+}
+.file-meta { flex: 1; min-width: 0; }
+.file-name {
+  font-size: .82rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-size { font-size: .68rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.file-download-icon { color: var(--muted); font-size: .8rem; flex-shrink: 0; }
+
 .bubble a {
   color: var(--accent); text-decoration: none;
   border-bottom: 1px solid rgba(79,158,255,.3);
-  transition: border-color .15s;
-  word-break: break-all;
+  transition: border-color .15s; word-break: break-all;
 }
 .bubble a:hover { border-color: var(--accent); }
 
-/* link preview card */
 .link-preview {
-  margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px; overflow: hidden;
-  background: var(--s1);
-  display: flex; flex-direction: column;
-  max-width: 340px;
+  margin-top: 8px; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; background: var(--s1);
+  display: flex; flex-direction: column; max-width: 340px;
 }
-.link-preview-bar {
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-}
+.link-preview-bar { height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
 .link-preview-body { padding: 10px 12px; }
 .link-preview-host {
-  font-size: .65rem; color: var(--muted);
-  font-family: var(--mono); text-transform: uppercase;
-  letter-spacing: .06em; margin-bottom: 4px;
+  font-size: .65rem; color: var(--muted); font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px;
 }
-.link-preview-title {
-  font-size: .82rem; font-weight: 600; line-height: 1.3;
-}
+.link-preview-title { font-size: .82rem; font-weight: 600; line-height: 1.3; }
 .link-preview-title a { border-bottom: none; }
 
-/* media */
 .bubble img, .bubble video {
   max-width: 100%; max-height: 300px;
-  border-radius: 8px; display: block;
-  margin-top: 4px; cursor: zoom-in;
+  border-radius: 8px; display: block; margin-top: 4px; cursor: zoom-in;
 }
 
-/* ── typing ──────────────────────────────────────────────── */
+/* ── formatting toolbar ── */
+#fmt-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 16px 0;
+  flex-shrink: 0;
+}
+.fmt-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; color: var(--muted);
+  font-size: .78rem; font-family: var(--mono); font-weight: 600;
+  transition: all .15s;
+}
+.fmt-btn:hover { color: var(--text); border-color: var(--border2); background: var(--s2); }
+.fmt-btn.active { color: var(--accent); border-color: rgba(79,158,255,.4); background: rgba(79,158,255,.08); }
+.fmt-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; }
+.fmt-hidden-btn {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--font); font-size: .7rem; font-weight: 600;
+  padding: 0 10px; height: 28px;
+  background: rgba(139,26,255,.08); border: 1px solid rgba(139,26,255,.3);
+  border-radius: 6px; cursor: pointer; color: rgba(139,26,255,.9);
+  transition: all .15s;
+}
+.fmt-hidden-btn:hover { background: rgba(139,26,255,.14); }
+.fmt-hidden-btn.active { background: rgba(139,26,255,.2); border-color: rgba(139,26,255,.6); }
+
 #typing {
   padding: 0 20px 5px; min-height: 18px;
   font-size: .68rem; color: var(--muted);
   font-family: var(--mono); flex-shrink: 0;
 }
 
-/* ── input area ──────────────────────────────────────────── */
 #input-area {
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border);
   background: rgba(5,6,8,.8);
   backdrop-filter: blur(20px);
@@ -329,7 +464,24 @@ header {
 #send-btn:active { transform: scale(.94); }
 #file-in { display: none; }
 
-/* ── modal overlay ───────────────────────────────────────── */
+/* ── upload progress ── */
+#upload-progress {
+  display: none;
+  padding: 4px 16px;
+  font-size: .7rem; font-family: var(--mono); color: var(--muted);
+  flex-shrink: 0;
+}
+#upload-progress.visible { display: flex; align-items: center; gap: 10px; }
+.progress-bar-track {
+  flex: 1; height: 3px; background: var(--s3); border-radius: 3px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; width: 0; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width .1s;
+}
+
+/* ── modals ── */
 .modal-bg {
   display: none; position: fixed; inset: 0; z-index: 50;
   background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
@@ -373,9 +525,57 @@ header {
 .modal-confirm:hover { opacity: .85; }
 #modal-err { font-size: .75rem; color: #ff4f64; min-height: 18px; margin-top: -6px; margin-bottom: 8px; }
 
-/* ── lightbox ────────────────────────────────────────────── */
-#lightbox {
+/* incoming call modal */
+#call-modal {
   display: none; position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(12px);
+  align-items: center; justify-content: center;
+}
+#call-modal.open { display: flex; }
+.call-modal-card {
+  background: var(--s1); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 36px;
+  width: 100%; max-width: 320px; text-align: center;
+  box-shadow: 0 32px 100px rgba(0,0,0,.7);
+  animation: modalIn .25s cubic-bezier(.16,1,.3,1);
+}
+.call-modal-avatar {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 0 40px rgba(79,158,255,.4);
+  animation: avatarRing 1.5s ease-in-out infinite;
+}
+@keyframes avatarRing {
+  0%,100%{ box-shadow:0 0 0 0 rgba(79,158,255,.4),0 0 40px rgba(79,158,255,.3); }
+  50%{ box-shadow:0 0 0 14px rgba(79,158,255,0),0 0 40px rgba(79,158,255,.3); }
+}
+.call-modal-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+.call-modal-type { font-size: .75rem; color: var(--muted); font-family: var(--mono); margin-bottom: 28px; }
+.call-modal-btns { display: flex; gap: 12px; justify-content: center; }
+.call-modal-accept, .call-modal-decline {
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  cursor: pointer; font-size: 1.3rem; transition: transform .15s, box-shadow .15s;
+}
+.call-modal-accept { background: var(--green); color: #000; box-shadow: 0 0 20px rgba(79,255,176,.4); }
+.call-modal-accept:hover { transform: scale(1.08); box-shadow: 0 0 35px rgba(79,255,176,.6); }
+.call-modal-decline { background: #ff4f64; color: #fff; box-shadow: 0 0 20px rgba(255,79,100,.4); }
+.call-modal-decline:hover { transform: scale(1.08); }
+
+/* screen share permission hint */
+#share-hint {
+  display: none; position: fixed; bottom: 90px; right: 20px; z-index: 40;
+  background: var(--s1); border: 1px solid var(--border2);
+  border-radius: 12px; padding: 12px 16px;
+  font-size: .78rem; max-width: 260px; line-height: 1.5;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5);
+}
+#share-hint.visible { display: block; }
+#share-hint-close { float: right; cursor: pointer; color: var(--muted); margin-left: 8px; }
+
+#lightbox {
+  display: none; position: fixed; inset: 0; z-index: 70;
   background: rgba(0,0,0,.88); backdrop-filter: blur(10px);
   align-items: center; justify-content: center; cursor: zoom-out;
 }
@@ -385,23 +585,20 @@ header {
   border-radius: 10px; box-shadow: 0 20px 80px rgba(0,0,0,.8);
 }
 
-/* ── toast ───────────────────────────────────────────────── */
 #toast {
   position: fixed; bottom: 80px; left: 50%;
   transform: translateX(-50%) translateY(14px);
   background: var(--s3); border: 1px solid var(--border2);
   color: var(--text); padding: 8px 20px; border-radius: 30px;
   font-size: .8rem; font-weight: 500;
-  opacity: 0; pointer-events: none; transition: all .3s; z-index: 70;
+  opacity: 0; pointer-events: none; transition: all .3s; z-index: 80;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ── firebase setup notice ───────────────────────────────── */
 #setup-notice {
-  position: fixed; inset: 0; z-index: 80;
+  position: fixed; inset: 0; z-index: 90;
   background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
 }
 .setup-card {
   background: var(--s1); border: 1px solid var(--border2);
@@ -417,33 +614,26 @@ header {
   white-space: pre-wrap; margin-bottom: 20px;
 }
 .setup-card ol { padding-left: 20px; font-size: .83rem; color: var(--muted); line-height: 2; }
-.setup-card ol li { margin-bottom: 2px; }
 .setup-card ol li strong { color: var(--text); }
 </style>
 </head>
 <body>
 
-<!-- aurora background -->
 <div id="bg">
-  <div class="orb"></div>
-  <div class="orb"></div>
-  <div class="orb"></div>
-  <div class="orb"></div>
+  <div class="orb"></div><div class="orb"></div>
+  <div class="orb"></div><div class="orb"></div>
 </div>
 
-<!-- setup notice (shown until Firebase is configured) -->
 <div id="setup-notice">
   <div class="setup-card">
     <h1>⚡ Setup Required</h1>
-    <p>You need to connect a Firebase Realtime Database before the chat will work. It only takes ~3 minutes and it's free.</p>
+    <p>Connect a Firebase Realtime Database before the chat will work. Takes ~3 minutes and is free.</p>
     <ol>
       <li>Go to <strong>console.firebase.google.com</strong> and create a project</li>
       <li>Add a <strong>Web App</strong> and copy the config object</li>
       <li>Go to <strong>Build › Realtime Database › Create database</strong> (test mode is fine)</li>
-      <li>Open <strong>chat.html</strong> in a text editor</li>
-      <li>Replace the <code>FIREBASE_CONFIG</code> values at the top of the file with your own</li>
-      <li>Change <code>OWNER_PASSWORD</code> to something secret</li>
-      <li>Host on <strong>GitHub Pages</strong> and share the URL!</li>
+      <li>Open <strong>chat.html</strong> in a text editor and replace <code>FIREBASE_CONFIG</code></li>
+      <li>Change <code>OWNER_PASSWORD</code> to something secret, then host on GitHub Pages!</li>
     </ol>
     <br>
     <code>const FIREBASE_CONFIG = {
@@ -452,7 +642,6 @@ header {
   databaseURL: "https://your-project-default-rtdb.firebaseio.com",
   ...
 };</code>
-    <p style="font-size:.75rem">This notice disappears automatically once a valid Firebase config is detected.</p>
   </div>
 </div>
 
@@ -463,6 +652,26 @@ header {
       Chat
     </div>
     <div class="header-right">
+      <!-- call buttons -->
+      <button class="call-btn" id="audio-call-btn" title="Voice call">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.48 2 2 0 0 1 3.58 1.3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6.29 6.29l.82-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </button>
+      <button class="call-btn" id="video-call-btn" title="Video call">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="23 7 16 12 23 17 23 7"/>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+      </button>
+      <button class="call-btn" id="screen-share-btn" title="Share screen">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </button>
+      <div class="call-divider"></div>
       <div id="online-pill">
         <div class="online-dot"></div>
         <span id="online-count">0</span> online
@@ -479,16 +688,48 @@ header {
     <button id="apply-btn">Apply</button>
   </div>
 
+  <!-- call status bar -->
+  <div id="call-bar">
+    <div class="call-bar-info">
+      <div class="call-bar-dot"></div>
+      <span class="call-bar-label" id="call-bar-label">Voice call</span>
+      <span class="call-bar-timer" id="call-timer">0:00</span>
+    </div>
+    <div class="call-bar-actions">
+      <button class="call-ctrl mute" id="mute-btn">🎙 Mute</button>
+      <button class="call-ctrl mute" id="cam-btn" style="display:none">📷 Cam</button>
+      <button class="call-ctrl hang" id="hang-btn">✕ End</button>
+    </div>
+  </div>
+
+  <!-- video grid -->
+  <div id="video-grid"></div>
+
   <div id="messages"></div>
   <div id="typing"></div>
 
+  <!-- upload progress -->
+  <div id="upload-progress">
+    <span id="upload-label">Uploading…</span>
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+  </div>
+
+  <!-- formatting bar -->
+  <div id="fmt-bar">
+    <button class="fmt-btn" id="fmt-bold" title="Bold"><b>B</b></button>
+    <button class="fmt-btn" id="fmt-italic" title="Italic"><i>I</i></button>
+    <button class="fmt-btn" id="fmt-code" title="Code"><span style="font-size:.7rem">`·`</span></button>
+    <div class="fmt-sep"></div>
+    <button class="fmt-hidden-btn" id="fmt-hidden">
+      <span>👁</span> Hidden
+    </button>
+  </div>
+
   <div id="input-area">
     <textarea id="msg-box" rows="1" placeholder="Say something…"></textarea>
-    <button class="btn-icon" id="attach-btn" title="Attach image or video">
+    <button class="btn-icon" id="attach-btn" title="Attach file (any type, any size)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="3"/>
-        <circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21"/>
+        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
       </svg>
     </button>
     <button id="send-btn" title="Send">
@@ -497,7 +738,7 @@ header {
         <polygon points="22 2 15 22 11 13 2 9 22 2"/>
       </svg>
     </button>
-    <input id="file-in" type="file" accept="image/*,video/*">
+    <input id="file-in" type="file" accept="*/*" multiple>
   </div>
 </div>
 
@@ -505,7 +746,7 @@ header {
 <div class="modal-bg" id="wipe-modal">
   <div class="modal">
     <h2>🗑 Wipe all messages</h2>
-    <p>This will permanently delete every message in the chatroom. Enter the owner password to continue.</p>
+    <p>Permanently deletes every message. Enter the owner password to continue.</p>
     <input type="password" id="wipe-pw" placeholder="Owner password…" autocomplete="off">
     <div id="modal-err"></div>
     <div class="modal-btns">
@@ -513,6 +754,25 @@ header {
       <button class="modal-confirm" id="wipe-confirm">Wipe everything</button>
     </div>
   </div>
+</div>
+
+<!-- incoming call modal -->
+<div id="call-modal">
+  <div class="call-modal-card">
+    <div class="call-modal-avatar" id="call-modal-avatar">📞</div>
+    <div class="call-modal-name" id="call-modal-name">Someone</div>
+    <div class="call-modal-type" id="call-modal-type">incoming voice call</div>
+    <div class="call-modal-btns">
+      <button class="call-modal-accept" id="call-accept">✓</button>
+      <button class="call-modal-decline" id="call-decline">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- share hint -->
+<div id="share-hint">
+  <span id="share-hint-close">✕</span>
+  Your screen is now being shared with everyone in the chat. Click the screen share button again to stop.
 </div>
 
 <!-- lightbox -->
@@ -523,17 +783,16 @@ header {
 
 <div id="toast"></div>
 
-<!-- Firebase SDK -->
 <script type="module">
 import { initializeApp }         from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, push, onValue, remove, set, onDisconnect }
+import { getDatabase, ref, push, onValue, remove, set, onDisconnect, update }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-/* ════════════════════════════════════════
-   CONFIG — edit these two things only
-════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   CONFIG — only edit these two things
+══════════════════════════════════════════ */
 const FIREBASE_CONFIG = {
-   apiKey: "AIzaSyAEQwwumbQKGip-S8bBARRPA54nzSMvJVg",
+  apiKey: "AIzaSyAEQwwumbQKGip-S8bBARRPA54nzSMvJVg",
   authDomain: "htmlchatroom-dc05d.firebaseapp.com",
   databaseURL: "https://htmlchatroom-dc05d-default-rtdb.firebaseio.com",
   projectId: "htmlchatroom-dc05d",
@@ -541,84 +800,102 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "68434387932",
   appId: "1:68434387932:web:b191290b385315cf8ae519"
 };
+const OWNER_PASSWORD = "wipe";
 
-const OWNER_PASSWORD = "wipe"; 
-
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════
    INIT
-════════════════════════════════════════ */
-// hide setup notice — config is present
+══════════════════════════════════════════ */
 document.getElementById('setup-notice').style.display = 'none';
 const isConfigured = true;
 
-let db, messagesRef, presenceRef, typingRef, myPresenceRef, myTypingRef;
-let myId = 'user_' + Math.random().toString(36).slice(2,9);
+let db, messagesRef, presenceRef, typingRef, signalRef, myPresenceRef, myTypingRef;
+let myId    = 'user_' + Math.random().toString(36).slice(2,9);
 let myName  = localStorage.getItem('chat_name')  || 'Anonymous';
 let myColor = localStorage.getItem('chat_color') || '#4f9eff';
-let typingTimer;
-let atBottom = true;
+let typingTimer, atBottom = true;
 
-// restore identity inputs
+// formatting state
+let fmtBold = false, fmtItalic = false, fmtCode = false, fmtHidden = false;
+
+// WebRTC state
+let peerConnections = {};   // peerId → RTCPeerConnection
+let localStream     = null;
+let screenStream    = null;
+let callType        = null; // 'audio'|'video'|'screen'
+let callActive      = false;
+let callTimerInterval;
+let callSeconds     = 0;
+let isMuted         = false, isCamOff = false;
+
 document.getElementById('name-input').value = myName;
 document.getElementById('color-pick').value = myColor;
 
-if (isConfigured) {
-  const app = initializeApp(FIREBASE_CONFIG);
-  db = getDatabase(app);
+const app = initializeApp(FIREBASE_CONFIG);
+db = getDatabase(app);
 
-  messagesRef   = ref(db, 'messages');
-  presenceRef   = ref(db, 'presence');
-  typingRef     = ref(db, 'typing');
-  myPresenceRef = ref(db, `presence/${myId}`);
-  myTypingRef   = ref(db, `typing/${myId}`);
+messagesRef   = ref(db, 'messages');
+presenceRef   = ref(db, 'presence');
+typingRef     = ref(db, 'typing');
+signalRef     = ref(db, 'signals');
+myPresenceRef = ref(db, `presence/${myId}`);
+myTypingRef   = ref(db, `typing/${myId}`);
 
-  // ── presence ──────────────────────────────────
-  set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() })
-    .catch(err => toast('⚠ Firebase write failed: ' + err.code));
-  onDisconnect(myPresenceRef).remove();
+set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() })
+  .catch(err => toast('⚠ Firebase write failed: ' + err.code));
+onDisconnect(myPresenceRef).remove();
+onDisconnect(myTypingRef).remove();
 
-  // online count
-  onValue(presenceRef, snap => {
-    const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-    document.getElementById('online-count').textContent = count;
+onValue(presenceRef, snap => {
+  document.getElementById('online-count').textContent =
+    snap.exists() ? Object.keys(snap.val()).length : 0;
+});
+
+onValue(typingRef, snap => {
+  if (!snap.exists()) { document.getElementById('typing').textContent = ''; return; }
+  const names = Object.entries(snap.val())
+    .filter(([id, v]) => id !== myId && v.typing)
+    .map(([, v]) => v.name);
+  document.getElementById('typing').textContent = names.length
+    ? (names.length === 1 ? `${names[0]} is typing…` : `${names.slice(0,-1).join(', ')} and ${names.at(-1)} are typing…`)
+    : '';
+});
+
+onValue(messagesRef, snap => {
+  const feed = document.getElementById('messages');
+  feed.innerHTML = '';
+  if (snap.exists()) Object.values(snap.val()).forEach(renderMsg);
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+});
+
+// WebRTC signaling listener
+onValue(ref(db, `signals/${myId}`), snap => {
+  if (!snap.exists()) return;
+  Object.entries(snap.val()).forEach(([sigId, sig]) => {
+    handleSignal(sigId, sig);
+    // remove processed signal
+    set(ref(db, `signals/${myId}/${sigId}`), null);
   });
+});
 
-  // ── typing ────────────────────────────────────
-  onDisconnect(myTypingRef).remove();
-
-  onValue(typingRef, snap => {
-    if (!snap.exists()) { document.getElementById('typing').textContent = ''; return; }
-    const names = Object.entries(snap.val())
-      .filter(([id, v]) => id !== myId && v.typing)
-      .map(([, v]) => v.name);
-    const el = document.getElementById('typing');
-    el.textContent = names.length
-      ? (names.length === 1 ? `${names[0]} is typing…` : `${names.slice(0,-1).join(', ')} and ${names.at(-1)} are typing…`)
-      : '';
-  });
-
-  // ── messages ──────────────────────────────────
-  onValue(messagesRef, snap => {
-    const feed = document.getElementById('messages');
-    feed.innerHTML = '';
-    if (snap.exists()) {
-      Object.values(snap.val()).forEach(renderMsg);
-    }
-    if (atBottom) feed.scrollTop = feed.scrollHeight;
-  });
+/* ══════════════════════════════════════════
+   SEND MESSAGE
+══════════════════════════════════════════ */
+function wrapFormat(text) {
+  let out = text;
+  if (fmtBold)   out = `**${out}**`;
+  if (fmtItalic) out = `_${out}_`;
+  if (fmtCode)   out = `\`${out}\``;
+  return out;
 }
 
-/* ════════════════════════════════════════
-   SEND MESSAGE
-════════════════════════════════════════ */
 function sendText() {
   const box  = document.getElementById('msg-box');
-  const text = box.value.trim();
-  if (!text || !isConfigured) return;
+  const raw  = box.value.trim();
+  if (!raw) return;
+  const text = wrapFormat(raw);
   push(messagesRef, {
-    type: 'text', text,
-    name: myName, color: myColor,
-    uid: myId, ts: Date.now()
+    type:   fmtHidden ? 'hidden' : 'text',
+    text, name: myName, color: myColor, uid: myId, ts: Date.now()
   }).catch(err => toast('⚠ Send failed: ' + err.code));
   box.value = '';
   box.style.height = 'auto';
@@ -626,7 +903,6 @@ function sendText() {
 }
 
 document.getElementById('send-btn').addEventListener('click', sendText);
-
 const msgBox = document.getElementById('msg-box');
 msgBox.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
@@ -634,45 +910,90 @@ msgBox.addEventListener('keydown', e => {
 msgBox.addEventListener('input', () => {
   msgBox.style.height = 'auto';
   msgBox.style.height = Math.min(msgBox.scrollHeight, 130) + 'px';
-  if (!isConfigured) return;
   set(myTypingRef, { name: myName, typing: true });
   clearTimeout(typingTimer);
   typingTimer = setTimeout(clearTyping, 2000);
 });
-
 function clearTyping() {
   if (myTypingRef) set(myTypingRef, { name: myName, typing: false });
 }
 
-/* ════════════════════════════════════════
-   FILE ATTACH
-════════════════════════════════════════ */
-document.getElementById('attach-btn').addEventListener('click', () =>
-  document.getElementById('file-in').click()
-);
-document.getElementById('file-in').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file || !isConfigured) return;
-  if (file.size > 5 * 1024 * 1024) { toast('Max file size is 5 MB'); return; }
-  toast('Uploading…');
-  const reader = new FileReader();
-  reader.onload = () => {
-    const kind = file.type.startsWith('video') ? 'video' : 'image';
-    push(messagesRef, {
-      type: kind, data: reader.result,
-      caption: file.name,
-      name: myName, color: myColor,
-      uid: myId, ts: Date.now()
-    });
-    toast('Sent!');
-  };
-  reader.readAsDataURL(file);
+/* ══════════════════════════════════════════
+   FORMATTING TOOLBAR
+══════════════════════════════════════════ */
+function toggleFmt(type) {
+  if (type === 'bold')   { fmtBold   = !fmtBold;   document.getElementById('fmt-bold').classList.toggle('active', fmtBold); }
+  if (type === 'italic') { fmtItalic = !fmtItalic; document.getElementById('fmt-italic').classList.toggle('active', fmtItalic); }
+  if (type === 'code')   { fmtCode   = !fmtCode;   document.getElementById('fmt-code').classList.toggle('active', fmtCode); }
+  if (type === 'hidden') { fmtHidden = !fmtHidden; document.getElementById('fmt-hidden').classList.toggle('active', fmtHidden); }
+  msgBox.focus();
+}
+document.getElementById('fmt-bold').addEventListener('click', () => toggleFmt('bold'));
+document.getElementById('fmt-italic').addEventListener('click', () => toggleFmt('italic'));
+document.getElementById('fmt-code').addEventListener('click', () => toggleFmt('code'));
+document.getElementById('fmt-hidden').addEventListener('click', () => toggleFmt('hidden'));
+
+/* ══════════════════════════════════════════
+   FILE ATTACH — any type, any size
+   Uses base64 chunked into one Firebase entry
+══════════════════════════════════════════ */
+document.getElementById('attach-btn').addEventListener('click', () => document.getElementById('file-in').click());
+document.getElementById('file-in').addEventListener('change', async e => {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  for (const file of files) {
+    await uploadFile(file);
+  }
   e.target.value = '';
 });
 
-/* ════════════════════════════════════════
+function uploadFile(file) {
+  return new Promise((resolve) => {
+    const progressEl = document.getElementById('upload-progress');
+    const labelEl    = document.getElementById('upload-label');
+    const fillEl     = document.getElementById('progress-fill');
+    progressEl.classList.add('visible');
+    labelEl.textContent = `Uploading ${file.name}…`;
+    fillEl.style.width  = '0%';
+
+    const reader = new FileReader();
+    reader.onprogress = ev => {
+      if (ev.lengthComputable) {
+        fillEl.style.width = Math.round(ev.loaded / ev.total * 90) + '%';
+      }
+    };
+    reader.onload = () => {
+      fillEl.style.width = '100%';
+      const isImg   = file.type.startsWith('image');
+      const isVideo = file.type.startsWith('video');
+      const kind    = isImg ? 'image' : isVideo ? 'video' : 'file';
+      push(messagesRef, {
+        type:    kind,
+        data:    reader.result,
+        caption: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        name: myName, color: myColor, uid: myId, ts: Date.now()
+      }).then(() => {
+        setTimeout(() => {
+          progressEl.classList.remove('visible');
+          fillEl.style.width = '0%';
+          resolve();
+        }, 400);
+      }).catch(err => {
+        toast('⚠ Upload failed: ' + err.message);
+        progressEl.classList.remove('visible');
+        resolve();
+      });
+    };
+    reader.onerror = () => { toast('⚠ Could not read file'); progressEl.classList.remove('visible'); resolve(); };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ══════════════════════════════════════════
    RENDER MESSAGE
-════════════════════════════════════════ */
+══════════════════════════════════════════ */
 const feed = document.getElementById('messages');
 feed.addEventListener('scroll', () => {
   atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
@@ -680,11 +1001,10 @@ feed.addEventListener('scroll', () => {
 
 function renderMsg(msg) {
   if (msg.type === 'system') { renderSystem(msg.text); return; }
-  const own  = msg.uid === myId;
-  const row  = document.createElement('div');
+  const own = msg.uid === myId;
+  const row = document.createElement('div');
   row.className = `msg-row ${own ? 'own' : 'other'}`;
 
-  // meta
   const meta = document.createElement('div');
   meta.className = 'meta';
   const nameEl = document.createElement('span');
@@ -696,30 +1016,81 @@ function renderMsg(msg) {
   timeEl.textContent = new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   meta.append(nameEl, timeEl);
 
-  // bubble
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
 
   if (msg.type === 'text') {
-    bubble.innerHTML = linkify(escHtml(msg.text));
-    // simple link previews for URLs
+    bubble.innerHTML = renderMarkdown(msg.text);
     const urls = extractUrls(msg.text);
-    if (urls.length) {
-      urls.slice(0,1).forEach(url => {
-        const preview = buildLinkPreview(url);
-        bubble.appendChild(preview);
-      });
-    }
+    if (urls.length) bubble.appendChild(buildLinkPreview(urls[0]));
+
+  } else if (msg.type === 'hidden') {
+    bubble.classList.add('hidden-msg');
+    const cover = document.createElement('div');
+    cover.className = 'hidden-cover';
+    cover.innerHTML = `<span class="hidden-eye">👁</span><span>Click to reveal — disappears in 5s</span>`;
+    const content = document.createElement('div');
+    content.className = 'hidden-content';
+    content.innerHTML = renderMarkdown(msg.text);
+    const timerBar = document.createElement('div');
+    timerBar.className = 'hidden-timer-bar';
+    content.appendChild(timerBar);
+    bubble.append(cover, content);
+    bubble.addEventListener('click', () => {
+      if (bubble.classList.contains('revealed')) return;
+      bubble.classList.add('revealed');
+      timerBar.style.transition = 'width 5s linear';
+      requestAnimationFrame(() => { timerBar.style.width = '0%'; });
+      setTimeout(() => {
+        row.style.transition = 'opacity .5s';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 500);
+      }, 5000);
+    });
+
   } else if (msg.type === 'image') {
     const img = document.createElement('img');
     img.src = msg.data; img.loading = 'lazy';
     img.addEventListener('click', () => openLB('img', msg.data));
     bubble.appendChild(img);
-    if (msg.caption) { const c = document.createElement('div'); c.style.cssText='font-size:.7rem;color:var(--muted);margin-top:3px'; c.textContent=msg.caption; bubble.appendChild(c); }
+    if (msg.caption) {
+      const c = document.createElement('div');
+      c.style.cssText = 'font-size:.7rem;color:var(--muted);margin-top:3px';
+      c.textContent = msg.caption;
+      bubble.appendChild(c);
+    }
+
   } else if (msg.type === 'video') {
     const vid = document.createElement('video');
     vid.src = msg.data; vid.controls = true;
     bubble.appendChild(vid);
+
+  } else if (msg.type === 'file') {
+    bubble.style.padding = '0';
+    bubble.style.background = 'none';
+    bubble.style.border = 'none';
+    const a = document.createElement('a');
+    a.className = 'file-bubble';
+    a.href = msg.data;
+    a.download = msg.caption || 'file';
+    a.title = 'Click to download';
+    const icon = document.createElement('div');
+    icon.className = 'file-icon';
+    icon.textContent = getFileEmoji(msg.mimeType, msg.caption);
+    const fileMeta = document.createElement('div');
+    fileMeta.className = 'file-meta';
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'file-name';
+    nameDiv.textContent = msg.caption || 'file';
+    const sizeDiv = document.createElement('div');
+    sizeDiv.className = 'file-size';
+    sizeDiv.textContent = msg.fileSize ? formatSize(msg.fileSize) : '';
+    fileMeta.append(nameDiv, sizeDiv);
+    const dl = document.createElement('div');
+    dl.className = 'file-download-icon';
+    dl.textContent = '↓';
+    a.append(icon, fileMeta, dl);
+    bubble.appendChild(a);
   }
 
   row.append(meta, bubble);
@@ -727,49 +1098,67 @@ function renderMsg(msg) {
 }
 
 function renderSystem(text) {
-  const row = document.createElement('div');
-  row.className = 'msg-row sys';
-  const b = document.createElement('div');
-  b.className = 'bubble'; b.textContent = text;
+  const row = document.createElement('div'); row.className = 'msg-row sys';
+  const b = document.createElement('div'); b.className = 'bubble'; b.textContent = text;
   row.appendChild(b); feed.appendChild(row);
 }
 
-/* ════════════════════════════════════════
-   LINK UTILS
-════════════════════════════════════════ */
-const URL_RE = /https?:\/\/[^\s<>"']+/g;
+/* ══════════════════════════════════════════
+   MARKDOWN RENDERER (bold, italic, code)
+══════════════════════════════════════════ */
+function renderMarkdown(text) {
+  let html = escHtml(text);
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+  html = html.replace(/`(.+?)`/g, '<code style="font-family:var(--mono);background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:.83em">$1</code>');
+  html = linkify(html);
+  return html;
+}
 
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-
 function linkify(html) {
-  return html.replace(URL_RE, url =>
-    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
-  );
+  return html.replace(URL_RE, url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
 }
-
-function extractUrls(text) {
-  return text.match(URL_RE) || [];
-}
-
+function extractUrls(text) { return text.match(URL_RE) || []; }
 function buildLinkPreview(url) {
   const card = document.createElement('div');
   card.className = 'link-preview';
   let hostname = '';
-  try { hostname = new URL(url).hostname.replace('www.',''); } catch(e) {}
-  card.innerHTML = `
-    <div class="link-preview-bar"></div>
-    <div class="link-preview-body">
-      <div class="link-preview-host">${escHtml(hostname)}</div>
-      <div class="link-preview-title"><a href="${url}" target="_blank" rel="noopener noreferrer">${escHtml(url.length > 60 ? url.slice(0,60)+'…' : url)}</a></div>
-    </div>`;
+  try { hostname = new URL(url).hostname.replace('www.',''); } catch(e){}
+  card.innerHTML = `<div class="link-preview-bar"></div><div class="link-preview-body"><div class="link-preview-host">${escHtml(hostname)}</div><div class="link-preview-title"><a href="${url}" target="_blank" rel="noopener noreferrer">${escHtml(url.length>60?url.slice(0,60)+'…':url)}</a></div></div>`;
   return card;
 }
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+  return (bytes/1024/1024/1024).toFixed(2) + ' GB';
+}
+function getFileEmoji(mime, name) {
+  if (!mime && !name) return '📎';
+  const m = (mime || '').toLowerCase();
+  const n = (name || '').toLowerCase();
+  if (m.startsWith('image')) return '🖼';
+  if (m.startsWith('video')) return '🎬';
+  if (m.startsWith('audio')) return '🎵';
+  if (m.includes('pdf')) return '📄';
+  if (m.includes('zip') || m.includes('archive') || n.endsWith('.zip') || n.endsWith('.rar')) return '🗜';
+  if (m.includes('word') || n.endsWith('.doc') || n.endsWith('.docx')) return '📝';
+  if (m.includes('sheet') || n.endsWith('.xls') || n.endsWith('.xlsx') || n.endsWith('.csv')) return '📊';
+  if (m.includes('presentation') || n.endsWith('.ppt') || n.endsWith('.pptx')) return '📊';
+  if (m.includes('javascript') || m.includes('python') || m.includes('html') || m.includes('css')) return '💾';
+  return '📎';
+}
 
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════
    IDENTITY
-════════════════════════════════════════ */
+══════════════════════════════════════════ */
 document.getElementById('apply-btn').addEventListener('click', applyIdentity);
 document.getElementById('name-input').addEventListener('keydown', e => { if(e.key==='Enter') applyIdentity(); });
 
@@ -778,58 +1167,394 @@ function applyIdentity() {
   myColor = document.getElementById('color-pick').value;
   localStorage.setItem('chat_name', myName);
   localStorage.setItem('chat_color', myColor);
-  if (isConfigured) {
-    set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() });
-    push(messagesRef, { type:'system', text:`✎  renamed to ${myName}`, ts: Date.now() });
-  }
+  set(myPresenceRef, { name: myName, color: myColor, ts: Date.now() });
+  push(messagesRef, { type:'system', text:`✎  ${myName} updated their identity`, ts: Date.now() });
   toast('Identity updated!');
 }
 
-/* ════════════════════════════════════════
-   WIPE MODAL
-════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   WIPE
+══════════════════════════════════════════ */
 document.getElementById('wipe-btn').addEventListener('click', () => {
   document.getElementById('wipe-pw').value = '';
   document.getElementById('modal-err').textContent = '';
   document.getElementById('wipe-modal').classList.add('open');
   setTimeout(() => document.getElementById('wipe-pw').focus(), 50);
 });
-document.getElementById('wipe-cancel').addEventListener('click', closeWipe);
-document.getElementById('wipe-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeWipe(); });
-
-document.getElementById('wipe-pw').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('wipe-confirm').click();
-});
-
+document.getElementById('wipe-cancel').addEventListener('click', () => document.getElementById('wipe-modal').classList.remove('open'));
+document.getElementById('wipe-modal').addEventListener('click', e => { if(e.target===e.currentTarget) document.getElementById('wipe-modal').classList.remove('open'); });
+document.getElementById('wipe-pw').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('wipe-confirm').click(); });
 document.getElementById('wipe-confirm').addEventListener('click', () => {
   const pw = document.getElementById('wipe-pw').value;
-  if (pw !== OWNER_PASSWORD) {
-    document.getElementById('modal-err').textContent = 'Incorrect password.';
-    document.getElementById('wipe-pw').focus();
-    return;
-  }
-  if (!isConfigured) { closeWipe(); toast('Firebase not configured yet.'); return; }
+  if (pw !== OWNER_PASSWORD) { document.getElementById('modal-err').textContent = 'Incorrect password.'; return; }
   remove(messagesRef).then(() => {
-    closeWipe();
+    document.getElementById('wipe-modal').classList.remove('open');
     toast('All messages wiped.');
-  }).catch(() => {
-    document.getElementById('modal-err').textContent = 'Failed — check Firebase rules.';
-  });
+  }).catch(() => { document.getElementById('modal-err').textContent = 'Failed — check Firebase rules.'; });
 });
 
-function closeWipe() {
-  document.getElementById('wipe-modal').classList.remove('open');
+/* ══════════════════════════════════════════
+   WebRTC CALLS (audio / video / screen share)
+   Mesh architecture: each peer connects directly to all others
+══════════════════════════════════════════ */
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
+// Signal helpers
+function sendSignal(targetId, data) {
+  const sigRef = ref(db, `signals/${targetId}/${myId}_${Date.now()}`);
+  set(sigRef, { ...data, from: myId, fromName: myName });
 }
 
-/* ════════════════════════════════════════
+async function handleSignal(sigId, sig) {
+  if (sig.from === myId) return;
+  const peerId = sig.from;
+
+  if (sig.type === 'call-offer') {
+    // Show incoming call UI
+    document.getElementById('call-modal-name').textContent = sig.fromName || 'Someone';
+    document.getElementById('call-modal-type').textContent = `incoming ${sig.callType} call`;
+    document.getElementById('call-modal-avatar').textContent = sig.callType === 'audio' ? '📞' : sig.callType === 'video' ? '📹' : '🖥';
+    document.getElementById('call-modal').classList.add('open');
+
+    document.getElementById('call-accept').onclick = async () => {
+      document.getElementById('call-modal').classList.remove('open');
+      callType = sig.callType;
+      await startLocalStream(callType);
+      const pc = createPeerConnection(peerId);
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sig.sdp }));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendSignal(peerId, { type: 'call-answer', sdp: answer.sdp, callType });
+      startCallUI(callType);
+    };
+    document.getElementById('call-decline').onclick = () => {
+      document.getElementById('call-modal').classList.remove('open');
+      sendSignal(peerId, { type: 'call-declined' });
+    };
+
+  } else if (sig.type === 'call-answer') {
+    const pc = peerConnections[peerId];
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: sig.sdp }));
+
+  } else if (sig.type === 'ice-candidate') {
+    const pc = peerConnections[peerId];
+    if (pc && sig.candidate) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(sig.candidate))); } catch(e){}
+    }
+
+  } else if (sig.type === 'call-declined') {
+    toast(`${sig.fromName || 'Someone'} declined the call`);
+    hangUp();
+
+  } else if (sig.type === 'call-ended') {
+    toast(`${sig.fromName || 'Someone'} left the call`);
+    cleanupPeer(peerId);
+    if (Object.keys(peerConnections).length === 0) hangUp();
+
+  } else if (sig.type === 'screen-share-started') {
+    toast(`${sig.fromName || 'Someone'} started screen sharing`);
+
+  } else if (sig.type === 'screen-share-stopped') {
+    toast(`${sig.fromName || 'Someone'} stopped screen sharing`);
+    // Remove their screen tile
+    const tile = document.getElementById('screen_' + peerId);
+    if (tile) tile.remove();
+  }
+}
+
+function createPeerConnection(peerId) {
+  if (peerConnections[peerId]) return peerConnections[peerId];
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+  peerConnections[peerId] = pc;
+
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      sendSignal(peerId, { type: 'ice-candidate', candidate: JSON.stringify(e.candidate.toJSON()) });
+    }
+  };
+
+  pc.ontrack = e => {
+    const stream = e.streams[0];
+    // Detect if screen share (video tracks > 1 is a heuristic, label check)
+    const isScreen = e.track.label && (e.track.label.includes('screen') || e.track.label.includes('display'));
+    addRemoteVideoTile(peerId, stream, isScreen);
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      cleanupPeer(peerId);
+    }
+  };
+  return pc;
+}
+
+async function startLocalStream(type) {
+  if (localStream) return;
+  const constraints = type === 'audio'
+    ? { audio: true, video: false }
+    : { audio: true, video: true };
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (type === 'video') addLocalVideoTile();
+  } catch(err) {
+    toast('⚠ Could not access ' + (type === 'audio' ? 'microphone' : 'camera/microphone'));
+    throw err;
+  }
+}
+
+async function initiateCall(type) {
+  if (callActive) { toast('Already in a call'); return; }
+  // Get all online peers except self
+  const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
+  const peers = presSnap.exists()
+    ? Object.keys(presSnap.val()).filter(id => id !== myId)
+    : [];
+
+  if (peers.length === 0) { toast('No one else is online'); return; }
+
+  callType = type;
+  try {
+    await startLocalStream(type);
+  } catch(e) { return; }
+
+  for (const peerId of peers) {
+    const pc = createPeerConnection(peerId);
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    sendSignal(peerId, { type: 'call-offer', sdp: offer.sdp, callType: type });
+  }
+
+  startCallUI(type);
+  push(messagesRef, { type:'system', text:`📞 ${myName} started a ${type === 'audio' ? 'voice' : type === 'video' ? 'video' : 'screen share'} call`, ts: Date.now() });
+}
+
+function addLocalVideoTile() {
+  const grid = document.getElementById('video-grid');
+  let tile = document.getElementById('local-tile');
+  if (tile) return;
+  tile = document.createElement('div');
+  tile.className = 'video-tile';
+  tile.id = 'local-tile';
+  const vid = document.createElement('video');
+  vid.autoplay = true; vid.muted = true; vid.playsInline = true;
+  vid.srcObject = localStream;
+  const label = document.createElement('div');
+  label.className = 'video-tile-label';
+  label.textContent = myName + ' (you)';
+  tile.append(vid, label);
+  grid.appendChild(tile);
+}
+
+function addRemoteVideoTile(peerId, stream, isScreen) {
+  const grid = document.getElementById('video-grid');
+  const tileId = (isScreen ? 'screen_' : 'remote_') + peerId;
+  let tile = document.getElementById(tileId);
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.className = 'video-tile' + (isScreen ? ' screen-tile' : '');
+    tile.id = tileId;
+    const vid = document.createElement('video');
+    vid.autoplay = true; vid.playsInline = true; vid.controls = isScreen;
+    const label = document.createElement('div');
+    label.className = 'video-tile-label';
+    label.textContent = isScreen ? '🖥 Screen' : peerId.slice(0,8);
+    tile.append(vid, label);
+    grid.appendChild(tile);
+  }
+  tile.querySelector('video').srcObject = stream;
+  grid.classList.add('visible');
+}
+
+function addScreenShareTile(stream) {
+  const grid = document.getElementById('video-grid');
+  let tile = document.getElementById('my-screen-tile');
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.className = 'video-tile screen-tile';
+    tile.id = 'my-screen-tile';
+    const vid = document.createElement('video');
+    vid.autoplay = true; vid.muted = true; vid.playsInline = true;
+    const label = document.createElement('div');
+    label.className = 'video-tile-label';
+    label.textContent = '🖥 Your screen';
+    tile.append(vid, label);
+    grid.appendChild(tile);
+  }
+  tile.querySelector('video').srcObject = stream;
+  grid.classList.add('visible');
+}
+
+function startCallUI(type) {
+  callActive = true;
+  callSeconds = 0;
+  clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    const m = Math.floor(callSeconds/60);
+    const s = String(callSeconds%60).padStart(2,'0');
+    document.getElementById('call-timer').textContent = `${m}:${s}`;
+  }, 1000);
+
+  const callBar = document.getElementById('call-bar');
+  callBar.classList.add('visible');
+  document.getElementById('call-bar-label').textContent =
+    type === 'audio' ? 'Voice call' : type === 'video' ? 'Video call' : 'Screen share';
+  document.getElementById('cam-btn').style.display = type === 'video' ? '' : 'none';
+
+  // Highlight the active call button
+  document.getElementById('audio-call-btn').classList.toggle('active', type === 'audio');
+  document.getElementById('video-call-btn').classList.toggle('active', type === 'video');
+
+  if (type === 'video') {
+    document.getElementById('video-grid').classList.add('visible');
+  }
+}
+
+function hangUp() {
+  // Notify peers
+  Object.keys(peerConnections).forEach(peerId => {
+    sendSignal(peerId, { type: 'call-ended' });
+  });
+
+  // Stop all tracks
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+
+  // Close all peer connections
+  Object.values(peerConnections).forEach(pc => pc.close());
+  peerConnections = {};
+
+  callActive = false;
+  callType   = null;
+  clearInterval(callTimerInterval);
+
+  document.getElementById('call-bar').classList.remove('visible');
+  document.getElementById('video-grid').classList.remove('visible');
+  document.getElementById('video-grid').innerHTML = '';
+  document.getElementById('audio-call-btn').classList.remove('active');
+  document.getElementById('video-call-btn').classList.remove('active');
+  document.getElementById('screen-share-btn').classList.remove('active');
+  document.getElementById('share-hint').classList.remove('visible');
+
+  isMuted = false; isCamOff = false;
+  document.getElementById('mute-btn').textContent = '🎙 Mute';
+  document.getElementById('mute-btn').classList.remove('active');
+}
+
+function cleanupPeer(peerId) {
+  if (peerConnections[peerId]) {
+    peerConnections[peerId].close();
+    delete peerConnections[peerId];
+  }
+  const videoTile  = document.getElementById('remote_' + peerId);
+  const screenTile = document.getElementById('screen_' + peerId);
+  if (videoTile)  videoTile.remove();
+  if (screenTile) screenTile.remove();
+}
+
+// Call button handlers
+document.getElementById('audio-call-btn').addEventListener('click', () => {
+  if (callActive) { hangUp(); return; }
+  initiateCall('audio');
+});
+document.getElementById('video-call-btn').addEventListener('click', () => {
+  if (callActive) { hangUp(); return; }
+  initiateCall('video');
+});
+
+// Screen share button
+document.getElementById('screen-share-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('screen-share-btn');
+
+  if (screenStream) {
+    // Stop sharing
+    screenStream.getTracks().forEach(t => t.stop());
+    screenStream = null;
+    btn.classList.remove('active');
+    const tile = document.getElementById('my-screen-tile');
+    if (tile) tile.remove();
+    document.getElementById('share-hint').classList.remove('visible');
+
+    // Notify peers
+    const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
+    const peers = presSnap.exists() ? Object.keys(presSnap.val()).filter(id => id !== myId) : [];
+    peers.forEach(p => sendSignal(p, { type: 'screen-share-stopped' }));
+    return;
+  }
+
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    btn.classList.add('active');
+    addScreenShareTile(screenStream);
+    document.getElementById('video-grid').classList.add('visible');
+    document.getElementById('share-hint').classList.add('visible');
+
+    // Notify peers
+    const presSnap = await new Promise(res => onValue(presenceRef, res, { onlyOnce: true }));
+    const peers = presSnap.exists() ? Object.keys(presSnap.val()).filter(id => id !== myId) : [];
+
+    for (const peerId of peers) {
+      let pc = peerConnections[peerId];
+      if (!pc) pc = createPeerConnection(peerId);
+      screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendSignal(peerId, { type: 'call-offer', sdp: offer.sdp, callType: 'screen' });
+      sendSignal(peerId, { type: 'screen-share-started' });
+    }
+
+    screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+      document.getElementById('screen-share-btn').click();
+    });
+  } catch(e) {
+    toast('Screen share cancelled or denied');
+  }
+});
+
+// Mute
+document.getElementById('mute-btn').addEventListener('click', () => {
+  if (!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = isMuted ? '🔇 Unmute' : '🎙 Mute';
+  btn.classList.toggle('active', isMuted);
+});
+
+// Cam toggle
+document.getElementById('cam-btn').addEventListener('click', () => {
+  if (!localStream) return;
+  isCamOff = !isCamOff;
+  localStream.getVideoTracks().forEach(t => t.enabled = !isCamOff);
+  const btn = document.getElementById('cam-btn');
+  btn.textContent = isCamOff ? '📷 Show cam' : '📷 Cam';
+  btn.classList.toggle('active', isCamOff);
+});
+
+// Hang up
+document.getElementById('hang-btn').addEventListener('click', hangUp);
+
+// Share hint close
+document.getElementById('share-hint-close').addEventListener('click', () => {
+  document.getElementById('share-hint').classList.remove('visible');
+});
+
+/* ══════════════════════════════════════════
    LIGHTBOX
-════════════════════════════════════════ */
+══════════════════════════════════════════ */
 function openLB(type, src) {
-  const lb = document.getElementById('lightbox');
+  const lb  = document.getElementById('lightbox');
   const img = document.getElementById('lb-img');
   const vid = document.getElementById('lb-vid');
   if (type === 'img') { img.src = src; img.style.display='block'; vid.style.display='none'; }
-  else { vid.src = src; vid.style.display='block'; img.style.display='none'; }
+  else                { vid.src = src; vid.style.display='block'; img.style.display='none'; }
   lb.classList.add('open');
 }
 document.getElementById('lightbox').addEventListener('click', () => {
@@ -837,15 +1562,15 @@ document.getElementById('lightbox').addEventListener('click', () => {
   document.getElementById('lb-vid').pause();
 });
 
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════
    TOAST
-════════════════════════════════════════ */
+══════════════════════════════════════════ */
 let toastT;
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastT);
-  toastT = setTimeout(() => el.classList.remove('show'), 2400);
+  toastT = setTimeout(() => el.classList.remove('show'), 2800);
 }
 </script>
 </body>
